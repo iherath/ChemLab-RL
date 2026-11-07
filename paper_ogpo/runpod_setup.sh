@@ -19,7 +19,11 @@ export PATH="$HOME/.local/bin:$PATH"
 if command -v apt-get >/dev/null; then
     export DEBIAN_FRONTEND=noninteractive
     apt-get update -qq
-    apt-get install -y -qq libosmesa6 libgl1 >/dev/null
+    apt-get install -y -qq libosmesa6 libgl1
+    apt-get install -y -qq libcusparse12 libcublas12 libnvjitlink12 \
+        || apt-get install -y -qq cuda-libraries-12-8 \
+        || apt-get install -y -qq cuda-libraries-12-6 \
+        || true
 fi
 
 if [ ! -f "$VADAR_ROOT/vadar/main.py" ]; then
@@ -42,25 +46,30 @@ UV_PROJECT_ENVIRONMENT="$VADAR_ROOT/.venv" uv pip install "jax[cuda12]" \
     nvidia-cusparse-cu12 nvidia-cublas-cu12 nvidia-cuda-nvcc-cu12 \
     nvidia-cuda-runtime-cu12 nvidia-nvjitlink-cu12 nvidia-cudnn-cu12
 
+SITE=$("$VADAR_ROOT/.venv/bin/python" -c "import site; print(site.getsitepackages()[0])")
+cp "$CHEMLAB_ROOT/paper_ogpo/sitecustomize.py" "$SITE/sitecustomize.py"
+
 CUDA_WHEEL_LIBS=$("$VADAR_ROOT/.venv/bin/python" - <<'PY'
-import os
-paths = []
-for pkg in (
-    "nvidia.cusparse", "nvidia.cublas", "nvidia.cuda_runtime",
-    "nvidia.cuda_nvcc", "nvidia.nvjitlink", "nvidia.cudnn",
-):
-    try:
-        m = __import__(pkg, fromlist=["x"])
-        lib = os.path.join(os.path.dirname(m.__file__), "lib")
-        if os.path.isdir(lib):
-            paths.append(lib)
-    except Exception:
-        pass
-print(":".join(paths))
+import glob, os, sys
+from pathlib import Path
+dirs, seen = [], set()
+roots = [sys.prefix, "/usr/local/cuda/lib64", "/usr/lib/x86_64-linux-gnu"]
+for root in roots:
+    if not os.path.isdir(root):
+        continue
+    for so in glob.glob(root + "/**/libcusparse.so*", recursive=True):
+        d = str(Path(so).parent)
+        if d not in seen:
+            seen.add(d)
+            dirs.append(d)
+    for d in glob.glob(root + "/**/nvidia/*/lib", recursive=True):
+        if os.path.isdir(d) and d not in seen:
+            seen.add(d)
+            dirs.append(d)
+print(":".join(dirs))
 PY
 )
-SYS_CUDA=""
-[ -d /usr/local/cuda/lib64 ] && SYS_CUDA=/usr/local/cuda/lib64
+echo "CUDA libs: ${CUDA_WHEEL_LIBS:-NONE}"
 
 "$VADAR_ROOT/.venv/bin/python" "$CHEMLAB_ROOT/paper_ogpo/patch_vadar.py" "$VADAR_ROOT"
 
@@ -72,7 +81,7 @@ export CHEMVIAL_DATASET="$CHEMVIAL_DATASET"
 export PYTHONPATH="$VADAR_ROOT:$CHEMLAB_ROOT:$CHEM_RL_SIM:$CHEM_RL_SIM/third_party/urgantry_sim"
 export MUJOCO_GL=osmesa
 export WANDB_MODE=\${WANDB_MODE:-online}
-export LD_LIBRARY_PATH="${CUDA_WHEEL_LIBS}${SYS_CUDA:+:$SYS_CUDA}:\${LD_LIBRARY_PATH:-}"
+export LD_LIBRARY_PATH="${CUDA_WHEEL_LIBS}:\${LD_LIBRARY_PATH:-}"
 EOF
 echo "wrote $CHEMLAB_ROOT/paper_ogpo/.env.sh"
 # shellcheck disable=SC1091
