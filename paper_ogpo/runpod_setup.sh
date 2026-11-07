@@ -38,6 +38,29 @@ if ! UV_PROJECT_ENVIRONMENT="$VADAR_ROOT/.venv" uv sync --frozen --extra "$CUDA"
     UV_PROJECT_ENVIRONMENT="$VADAR_ROOT/.venv" uv sync --extra "$CUDA"
 fi
 UV_PROJECT_ENVIRONMENT="$VADAR_ROOT/.venv" uv pip install mujoco
+UV_PROJECT_ENVIRONMENT="$VADAR_ROOT/.venv" uv pip install "jax[cuda12]" \
+    nvidia-cusparse-cu12 nvidia-cublas-cu12 nvidia-cuda-nvcc-cu12 \
+    nvidia-cuda-runtime-cu12 nvidia-nvjitlink-cu12 nvidia-cudnn-cu12
+
+CUDA_WHEEL_LIBS=$("$VADAR_ROOT/.venv/bin/python" - <<'PY'
+import os
+paths = []
+for pkg in (
+    "nvidia.cusparse", "nvidia.cublas", "nvidia.cuda_runtime",
+    "nvidia.cuda_nvcc", "nvidia.nvjitlink", "nvidia.cudnn",
+):
+    try:
+        m = __import__(pkg, fromlist=["x"])
+        lib = os.path.join(os.path.dirname(m.__file__), "lib")
+        if os.path.isdir(lib):
+            paths.append(lib)
+    except Exception:
+        pass
+print(":".join(paths))
+PY
+)
+SYS_CUDA=""
+[ -d /usr/local/cuda/lib64 ] && SYS_CUDA=/usr/local/cuda/lib64
 
 "$VADAR_ROOT/.venv/bin/python" "$CHEMLAB_ROOT/paper_ogpo/patch_vadar.py" "$VADAR_ROOT"
 
@@ -49,6 +72,10 @@ export CHEMVIAL_DATASET="$CHEMVIAL_DATASET"
 export PYTHONPATH="$VADAR_ROOT:$CHEMLAB_ROOT:$CHEM_RL_SIM:$CHEM_RL_SIM/third_party/urgantry_sim"
 export MUJOCO_GL=osmesa
 export WANDB_MODE=\${WANDB_MODE:-online}
+export LD_LIBRARY_PATH="${CUDA_WHEEL_LIBS}${SYS_CUDA:+:$SYS_CUDA}:\${LD_LIBRARY_PATH:-}"
 EOF
 echo "wrote $CHEMLAB_ROOT/paper_ogpo/.env.sh"
+# shellcheck disable=SC1091
+source "$CHEMLAB_ROOT/paper_ogpo/.env.sh"
+"$VADAR_ROOT/.venv/bin/python" -c "import jax; print('jax devices', jax.devices())"
 echo "next: source paper_ogpo/.env.sh && bash paper_ogpo/run_chem_vial.sh"

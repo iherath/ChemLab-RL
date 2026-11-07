@@ -71,6 +71,33 @@ def _bootstrap_chem_rl_sim() -> None:
     )
 
 
+_INFO_KEEP = (
+    "success",
+    "vial_on_pan",
+    "vial_upright",
+    "doors_closed",
+    "balance_g",
+    "subgoal_dones",
+)
+
+
+def _eval_info(info: dict) -> dict:
+    """Keep numeric keys only. Leo's env puts a string in balance_display, and
+    vadar's eval does np.mean over every info key."""
+    out = {}
+    for k in _INFO_KEEP:
+        if k not in info:
+            continue
+        v = info[k]
+        if k == "subgoal_dones":
+            out[k] = np.asarray(v, dtype=np.float32)
+        elif isinstance(v, (bool, np.bool_)):
+            out[k] = float(v)
+        elif isinstance(v, (int, float, np.integer, np.floating)):
+            out[k] = float(v)
+    return out
+
+
 def _skip_gl_renderer() -> None:
     """Leo's env always constructs mujoco.Renderer; training never uses pixels."""
     if getattr(mujoco, "_chemlab_dummy_renderer", False):
@@ -199,8 +226,7 @@ class ChemVialLowDimEnv(gym.Env):
             reward = env_r - 1.0
         if success:
             terminated = True
-        info["success"] = success
-        return self._obs(), float(reward), bool(terminated), bool(truncated), info
+        return self._obs(), float(reward), bool(terminated), bool(truncated), _eval_info(info)
 
     def render(self):
         return self._env.render() if hasattr(self._env, "render") else None
