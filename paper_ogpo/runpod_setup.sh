@@ -31,9 +31,9 @@ cd "$VADAR_ROOT"
 if ! UV_PROJECT_ENVIRONMENT="$VADAR_ROOT/.venv" uv sync --frozen --extra "$CUDA"; then
     UV_PROJECT_ENVIRONMENT="$VADAR_ROOT/.venv" uv sync --extra "$CUDA"
 fi
-"$VADAR_ROOT/.venv/bin/python" -m pip install -q mujoco
+UV_PROJECT_ENVIRONMENT="$VADAR_ROOT/.venv" uv pip install mujoco
 
-python "$CHEMLAB_ROOT/paper_ogpo/patch_vadar.py" "$VADAR_ROOT"
+"$VADAR_ROOT/.venv/bin/python" "$CHEMLAB_ROOT/paper_ogpo/patch_vadar.py" "$VADAR_ROOT"
 
 cat > "$CHEMLAB_ROOT/paper_ogpo/.env.sh" <<EOF
 export CHEMLAB_ROOT="$CHEMLAB_ROOT"
