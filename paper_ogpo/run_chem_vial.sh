@@ -53,7 +53,7 @@ fi
 
 export CUDA_VISIBLE_DEVICES=$device
 export XLA_PYTHON_CLIENT_MEM_FRACTION=$jax_frac
-export MUJOCO_GL=${MUJOCO_GL:-egl}
+export MUJOCO_GL=${MUJOCO_GL:-osmesa}
 
 cd "$VADAR_ROOT"
 mkdir -p "$SAVE_DIR" logs

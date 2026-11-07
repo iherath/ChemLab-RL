@@ -16,6 +16,12 @@ CUDA=${CUDA:-cuda12}
 command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh
 export PATH="$HOME/.local/bin:$PATH"
 
+if command -v apt-get >/dev/null; then
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update -qq
+    apt-get install -y -qq libosmesa6 libgl1 >/dev/null
+fi
+
 if [ ! -f "$VADAR_ROOT/vadar/main.py" ]; then
     git clone --depth 1 https://github.com/simchowitzlabpublic/vadar-public.git "$VADAR_ROOT"
 fi
@@ -41,7 +47,7 @@ export VADAR_ROOT="$VADAR_ROOT"
 export CHEM_RL_SIM="$CHEM_RL_SIM"
 export CHEMVIAL_DATASET="$CHEMVIAL_DATASET"
 export PYTHONPATH="$VADAR_ROOT:$CHEMLAB_ROOT:$CHEM_RL_SIM:$CHEM_RL_SIM/third_party/urgantry_sim"
-export MUJOCO_GL=egl
+export MUJOCO_GL=osmesa
 export WANDB_MODE=\${WANDB_MODE:-online}
 EOF
 echo "wrote $CHEMLAB_ROOT/paper_ogpo/.env.sh"

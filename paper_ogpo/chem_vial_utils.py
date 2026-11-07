@@ -11,6 +11,11 @@ import os
 import sys
 from pathlib import Path
 
+# mujoco binds a GL backend at import. RunPod EGL is often missing; this
+# task is low-dim so OSMesa is enough. Leave MUJOCO_GL=glfw alone (local Mac).
+if os.environ.get("MUJOCO_GL", "").lower() in ("", "egl"):
+    os.environ["MUJOCO_GL"] = "osmesa"
+
 import gymnasium as gym
 import mujoco
 import numpy as np
@@ -66,6 +71,28 @@ def _bootstrap_chem_rl_sim() -> None:
     )
 
 
+def _skip_gl_renderer() -> None:
+    """Leo's env always constructs mujoco.Renderer; training never uses pixels."""
+    if getattr(mujoco, "_chemlab_dummy_renderer", False):
+        return
+
+    class DummyRenderer:
+        def __init__(self, model, height=32, width=32, **_):
+            self.height, self.width = int(height), int(width)
+
+        def update_scene(self, *a, **k):
+            pass
+
+        def render(self):
+            return np.zeros((self.height, self.width, 3), dtype=np.uint8)
+
+        def close(self):
+            pass
+
+    mujoco.Renderer = DummyRenderer
+    mujoco._chemlab_dummy_renderer = True
+
+
 def _dataset_path(env_name: str | None = None) -> str:
     path = os.environ.get("CHEMVIAL_DATASET")
     if not path:
@@ -107,6 +134,7 @@ class ChemVialLowDimEnv(gym.Env):
     def __init__(self, seed: int = 0, subgoal_cfg=None, max_episode_steps: int = MAX_EPISODE_STEPS):
         super().__init__()
         _bootstrap_chem_rl_sim()
+        _skip_gl_renderer()
         from chem_rl_sim.env import VialWeighingEnv
 
         self._env = VialWeighingEnv(
