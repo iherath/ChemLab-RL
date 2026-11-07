@@ -1,4 +1,12 @@
 __pycache__/
 *.pyc
 *.pdf
+*.doc
+*.docx
 .DS_Store
+.venv/
+chem_rl_sim/
+data/**
+!data/teleop/
+!data/teleop/weigh_vial_grok_v2_lowdim.hdf5
+paper_ogpo/.env.sh

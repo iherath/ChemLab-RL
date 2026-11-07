@@ -1,10 +1,10 @@
-# Cyclic voltammetry starter: VaDar + OGPO
+# 🧪⚡️ Cyclic voltammetry starter: VaDar + OGPO
 
 A CPU toy for trying [VaDar](https://arxiv.org/abs/2610.26629) (value disaggregation) with the policy update from [OGPO](https://arxiv.org/abs/2605.03065) (off-policy generative policy optimization) on a long-horizon lab task. Two arms weigh a solid, dispense electrolyte, seat cell and potentiostat leads, then let a voltammetry sweep finish.
 
 This is an RL sandbox. It is not a Franka or UR driver, and it is not a procedure for a real electrochemical cell.
 
-The official codebases ([OGPO_public](https://github.com/simchowitzlabpublic/OGPO_public), [vadar-public](https://github.com/simchowitzlabpublic/vadar-public)) are CUDA / Robomimic stacks. They are not vendored here.
+The official codebases ([OGPO_public](https://github.com/simchowitzlabpublic/OGPO_public), [vadar-public](https://github.com/simchowitzlabpublic/vadar-public)) are CUDA / Robomimic stacks. They are not vendored here. For a RunPod run of **paper OGPO + VaDaR** on the vial env, see [`paper_ogpo/README.md`](paper_ogpo/README.md) (**24 GB** VRAM minimum for low-dim, **48 GB** for the paper’s ToolHang-sized launch).
 
 ## Run
 
@@ -41,8 +41,8 @@ OGPO's importance ratio is a product over `K` denoising steps of a flow or diffu
 
 Also left out:
 
-- Flow matching, diffusion, and the noise injection OGPO uses so a flow step has a density
-- Action chunks of length 8, best-of-N test-time selection, and the 20k-step critic warmup
+- Flow matching, diffusion, and the noise injection OGPO uses so a flow step has a density (use `paper_ogpo/` on CUDA)
+- Action chunks of length 8, best-of-N test-time selection, and the 20k-step critic warmup (same)
 - OGPO+ stabilizers: success-buffer regularization, two-sided conservative advantages, Q-variance reduction
 - A goal-conditioned hierarchical baseline. Conditioning `pi` on a subgoal id would add that without changing the lab.
 - Pixels, MuJoCo, and real robot control. Closing a gripper inside `REACH` snaps the nearest object; that is a contact proxy.

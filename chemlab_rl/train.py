@@ -77,7 +77,7 @@ def run(cfg: TrainConfig | None = None) -> dict[str, object]:
 
     demo_obs, demo_act = _collect_demos(env, replay, cfg.n_demos)
     policy = SquashedGaussianPolicy(env.obs_dim, env.action_dim, cfg.hidden)
-    bc_loss = _behavior_clone(policy, demo_obs, demo_act, cfg, rng)
+    bc_loss, _bc_hist = _behavior_clone(policy, demo_obs, demo_act, cfg, rng)
     target_policy = copy.deepcopy(policy)
 
     critic = CriticEnsemble(
@@ -162,7 +162,7 @@ def _behavior_clone(
     actions: np.ndarray,
     cfg: TrainConfig,
     rng: np.random.Generator,
-) -> float:
+) -> tuple[float, list[float]]:
     obs_t = torch.from_numpy(obs)
     act_t = torch.from_numpy(actions)
     # A free std fits the pre-tanh residual by widening, and the tanh
@@ -178,8 +178,10 @@ def _behavior_clone(
     opt = torch.optim.Adam(trainable, lr=cfg.lr)
     last = 0.0
     n = obs_t.shape[0]
+    epoch_losses: list[float] = []
     for _ in range(cfg.bc_epochs):
         order = rng.permutation(n)
+        batch_losses: list[float] = []
         for start in range(0, n, cfg.batch_size):
             index = order[start : start + cfg.batch_size]
             if index.size == 0:
@@ -190,9 +192,12 @@ def _behavior_clone(
             torch.nn.utils.clip_grad_norm_(policy.parameters(), 5.0)
             opt.step()
             last = float(loss.detach())
+            batch_losses.append(last)
+        if batch_losses:
+            epoch_losses.append(float(np.mean(batch_losses)))
     for param in policy.log_std_head.parameters():
         param.requires_grad_(True)
-    return last
+    return last, epoch_losses
 
 
 def _act(policy: SquashedGaussianPolicy, obs: np.ndarray) -> np.ndarray:
@@ -242,6 +247,7 @@ def _update_critic(
     loss.backward()
     opt.step()
     polyak_update(target_critic, critic, cfg.tau)
+    return float(loss.detach())
 
 
 def _update_actor(
@@ -276,6 +282,7 @@ def _update_actor(
     loss.backward()
     opt.step()
     polyak_update(target_policy, policy, cfg.tau)
+    return float(loss.detach())
 
 
 if __name__ == "__main__":
