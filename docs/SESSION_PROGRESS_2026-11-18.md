@@ -1,5 +1,41 @@
 # November 18 working record
 
+This is a chronological working record. The current summary below supersedes
+earlier run, ownership, scheduling, and publication statuses.
+
+## Current summary at 17:56 EST
+
+- Full powder weighing remains active and separate from vial placement. Physical
+  pad-centered pickup, loading and lift retained 0.16 g. A later controlled pour
+  delivered three grains (0.06 g) into the receiver with zero spill, but failed
+  the unchanged 4 mm tool tracking limit. Material was still moving at the stop;
+  settled force agreement has not passed. Elevated, reachable pour poses are
+  being checked. No accepted full-reset powder demonstration or powder BC run
+  exists. Staged continuations are diagnostics and contribute no BC episodes.
+- All 90 additional image-based vial demonstrations are collected and accepted.
+  Combined with eight usable historical episodes, the package has 98 episodes:
+  97 training and one held out. The new collection contains 98,413 controls and
+  2,460,325 physics checks; no unintended penetration was recorded. Historical
+  contact audit coverage remains explicitly weaker. All resets use a fixed scene.
+- Both the collected combined HDF5 and the Git-shard reconstruction passed the
+  full BC preflight. They contain 105,841 retained training controls and 1,011
+  held-out controls. All 3,038 dataset payloads and 1,412 attributes matched
+  exactly in a separate full-file comparison. Evidence is under
+  `docs/pilot/vial98_preflight/` and `docs/pilot/vial98_assembled_preflight/`.
+- The existing seven-episode SmolVLA BC run completed 2,000 updates. Scalar OGPO
+  and VaDar + OGPO each passed a real model optimizer check with three critic
+  and two actor updates. Their four-control rollouts do not measure task success.
+  The expanded dataset has not been trained; that work is assigned to the user's
+  colleague. Current instructions are in `docs/VIAL_VLA_RUNBOOK.md`.
+- Code was pushed to `iherath/ChemLab-RL/main` in `bac98c8`, without co-author
+  attribution. Dataset upload is proceeding in separate batches below GitHub's
+  per-push size limit. The complete release comprises 98 HDF5 shards, metadata,
+  checksums, the split, assembly/bootstrap scripts, and BC/RL run instructions.
+- The local midpoint report has six pages: five body pages and references. It
+  includes the measured BC curve, limited optimizer checks, completed collection
+  statistics and the remaining powder validation blocker. The original template
+  is preserved. Report files have not been published in Git.
+
 Midpoint report is due at midnight. The report source is in `10-703_midpoint-report-template/`; `main.pdf` is a compiled preliminary draft. The15:51 EST build was visually checked on all six pages: five body pages plus a dedicated references page, with no clipping or split references. PDF SHA256 is `fc598dbe406df45c2a2ca0cd85dd20ed86b3d56f3f89373171f2cf74d1275a6b`. Preserve the original `main.template.tex`. Isuru Herath leads RL/BC/evaluation; Ron Sarma and Michael Liang collect RealSense laboratory videos; Leo Wang develops simulation; Pranav Vignesh and Sarvesh Patil advise and mentor. The report lists the four student authors, Isuru as corresponding author, and credits both mentors.
 
 ## Accepted requirements

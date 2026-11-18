@@ -1,0 +1,27 @@
+{
+  "method": "vadar",
+  "episodes": [
+    {
+      "seed": 1000,
+      "success": false,
+      "controls": 4,
+      "subgoal_dones": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "balance_g": 0.0,
+      "terminated": false,
+      "truncated": true,
+      "fixed_scene": true
+    }
+  ],
+  "success_rate": 0.0,
+  "sampler": "ema_actor_stochastic_chain",
+  "best_of_n": 1,
+  "flow_steps": 10,
+  "action_steps": 2,
+  "fixed_scene": true,
+  "independent_initial_conditions": false
+}

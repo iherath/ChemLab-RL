@@ -1,0 +1,66 @@
+{
+  "batch_id": "vial90-audited-003",
+  "requested": 90,
+  "parallelism": 10,
+  "max_attempts": 150,
+  "deadline": 1795044389.562847,
+  "scope": "additional_fixed_scene_vial_placement_images",
+  "retries": 0,
+  "merge": {
+    "dataset": "/datasets/vial90-audited-003/additional_90.hdf5",
+    "sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+    "accepted": 90,
+    "samples": 98413,
+    "bytes": 2605929083,
+    "fixed_scene": true
+  },
+  "elapsed_seconds": 819.8445661067963,
+  "accepted_count": 90,
+  "candidate_errors": [
+    {
+      "index": 84,
+      "error": "FileExistsError"
+    },
+    {
+      "index": 81,
+      "error": "FileExistsError"
+    },
+    {
+      "index": 85,
+      "error": "FileExistsError"
+    },
+    {
+      "index": 82,
+      "error": "FileExistsError"
+    },
+    {
+      "index": 89,
+      "error": "FileExistsError"
+    },
+    {
+      "index": 86,
+      "error": "FileExistsError"
+    },
+    {
+      "index": 80,
+      "error": "FileExistsError"
+    },
+    {
+      "index": 88,
+      "error": "FileExistsError"
+    },
+    {
+      "index": 87,
+      "error": "FileExistsError"
+    },
+    {
+      "index": 83,
+      "error": "FileExistsError"
+    }
+  ],
+  "physics_checks": 2460325,
+  "max_unintended_penetration_m": 0.0,
+  "max_penetration_m": 0.0009440229483612672,
+  "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+  "simulation_source": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+}

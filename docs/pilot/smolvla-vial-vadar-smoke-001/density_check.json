@@ -1,0 +1,17 @@
+{
+  "passed": true,
+  "max_abs_log_density_error": 0.0,
+  "tolerance": 1e-07,
+  "ratio_min": 1.0,
+  "ratio_max": 1.0,
+  "flow_steps": 10,
+  "chain_shape": [
+    2,
+    11,
+    50,
+    32
+  ],
+  "bf16": false,
+  "parameter_dtype": "torch.float32",
+  "log_density_dtype": "torch.float64"
+}

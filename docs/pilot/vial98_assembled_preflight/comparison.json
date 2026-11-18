@@ -1,0 +1,24 @@
+{
+  "passed": true,
+  "original_path": "data/teleop/weigh_vial_hybrid98.hdf5",
+  "assembled_path": "/tmp/chemlab-vial98-from-git.hdf5",
+  "original_sha256": "d5aebc989c6ea12cff95aeb95132a6881ec824a9ae9a6b8648a834fcfa3fdc31",
+  "assembled_sha256": "eb3a946882e872f8ebdccbb3e6d4049413ef03b746af5a523797bfd7e1b1d853",
+  "exact_dataset_payload_and_attributes": true,
+  "all_chunk_and_compression_properties_match": true,
+  "manifest_differences": [
+    "/dataset_sha256",
+    "/audit/dataset_sha256"
+  ],
+  "training_statistics_identical": true,
+  "episode_count": 98,
+  "training_episodes": 97,
+  "heldout_episodes": 1,
+  "training_controls": 105841,
+  "heldout_controls": 1011,
+  "elapsed_seconds": 62.50008333299775,
+  "datasets": 3038,
+  "groups": 394,
+  "attributes": 1412,
+  "payload_bytes_per_file": 8100598712
+}

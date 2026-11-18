@@ -7,6 +7,17 @@ placement. Historical `demo_7` is the held-out trajectory. The remaining 97
 trajectories train. The split is recorded in
 [`configs/vial_hybrid98_split.json`](../configs/vial_hybrid98_split.json).
 
+The 90 additional demonstrations in batch `vial90-audited-003` are complete:
+98,413 controls, 2,460,325 physics-substep checks, and 90 distinct trajectory
+hashes. Maximum intended-contact penetration was 0.944 mm, within the 1 mm
+bound; recorded unintended penetration was zero. The largest instantaneous
+raw scale reading was 94.4 g, and every final reading settled to 20 g. The ten
+other candidate calls stopped with `FileExistsError`; they are file-handling
+skips, not measured task failures. Collection counts are not a learned-policy
+success rate. See the [collection record](pilot/vial90-audited-003/collection_state.json).
+The complete package is included in this repository. Expanded-data training
+has not begun.
+
 This is the native rigid-body vial task: open the draft shield, move the 20 g
 vial onto the scale, and close the shield. Initial scene geometry is fixed.
 The held-out trajectory does not establish generalization to different scenes
@@ -51,7 +62,7 @@ To verify an existing package without assembling:
 For maintainers packaging the collected combined file:
 
 ```bash
-.venv-vial/bin/python scripts/package_vial_dataset.py package --input data/teleop/vial90-audited-001_combined98.hdf5 --output-dir data/teleop/vial_placement_v1 --split configs/vial_hybrid98_split.json
+.venv-vial/bin/python scripts/package_vial_dataset.py package --input data/teleop/weigh_vial_hybrid98.hdf5 --output-dir data/teleop/vial_placement_v1 --split configs/vial_hybrid98_split.json
 ```
 
 The packager streams HDF5 object copies and checks each resulting file size.
@@ -123,3 +134,12 @@ historical demonstration was also packaged and reconstructed: its 29.8 MB HDF5
 episode retained semantic SHA256
 `926774c953558382d3201a7cf6ef6a21c6fb6d64c980f907478ce84215ecad54`.
 These checks establish packaging fidelity, not policy performance.
+
+The complete 98-episode package was also reconstructed and passed the BC
+preflight: 105,841 training controls and 1,011 held-out controls after terminal
+truncation. A direct comparison checked all 3,038 datasets, 394 groups, and
+1,412 attributes, including image bytes, dtypes, chunking, and compression.
+All contents matched the collected combined file. The two training manifests
+differ only in their whole-file SHA256 fields. See the
+[full comparison](pilot/vial98_assembled_preflight/comparison.json) and
+[reconstructed-data audit](pilot/vial98_assembled_preflight/dataset_audit.json).

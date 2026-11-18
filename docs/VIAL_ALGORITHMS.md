@@ -108,6 +108,17 @@ contact audit. Native contact dynamics and force-based scale readings are
 retained. The simulator reports post-control penetration diagnostics; those
 do not certify every physics substep in these historical demonstrations.
 
+Additional collection audits each 2 ms step during recorded controls. It
+rejects penetration above 50 µm for robot/static contacts, opposite-arm
+contacts, and non-pad robot contacts with movable objects. This includes
+forbidden wrist, camera-mount and gripper-shell contact with the shield.
+Finger-pad contacts with movable objects and other allowed support contacts
+have a 1 mm penetration limit. Absolute scale load above 100 g is allowed
+only for a continuous interval of at most 0.1 seconds. The original sensor
+reading is retained. Hybrid dataset validation requires the serialized audit,
+matching source and trajectory hashes, finite extrema and complete substep
+coverage. Historical episodes retain their original hashes and quality filter.
+
 The bounded runner checks time between chunks and updates. Model loading,
 demonstration import, density checks, and final evaluation require additional
 time. The Modal launcher must supply an external absolute deadline.
@@ -153,11 +164,30 @@ terminal rows among 3,716 chunks and batch size four, 100 uniform warmup updates
 expect only 0.75 terminal draws; 500 expect 3.77 and 1,000 expect 7.53. Even
 1,000 updates do not guarantee useful value propagation across the long task.
 
-Eleven focused CPU tests pass, covering actual Adam updates, the frozen BoN
+Focused CPU tests cover actual Adam updates, the frozen BoN
 actor, scalar and vector targets, terminal/truncation handling, first-success
 collection, checkpoint restoration, density consistency, and held-out exclusion.
-These tests use a small actor and a contract environment. Real SmolVLA optimizer
-and native-robot results must come from the corresponding saved run artifacts.
+These tests use a small actor and a contract environment. Separate A100 checks
+also completed actual optimizer updates on the pretrained SmolVLA checkpoint:
+
+| Verified smoke | Critic / actor updates | Online / evaluation controls | Wall seconds | Density error / ratios |
+|---|---:|---:|---:|---|
+| Scalar OGPO | 3 / 2 | 4 / 4 | 114.82 | 0 / exactly 1 |
+| VaDar + OGPO | 3 / 2 | 4 / 4 | 109.36 | 0 / exactly 1 |
+
+Both checks used FP32, a K = 10 flow chain, batch size 2 and group size 2,
+after importing the same 7 training demonstrations. Their saved evidence is
+[`smolvla-vial-optimizer-smoke-001`](pilot/smolvla-vial-optimizer-smoke-001/wrapper_result.json)
+and [`smolvla-vial-vadar-smoke-001`](pilot/smolvla-vial-vadar-smoke-001/wrapper_result.json).
+These demonstrate real SmolVLA loading, likelihood consistency, critic updates,
+actor gradients and interaction with the native robot environment. Neither
+short rollout completed a task episode; no full-task success rate or RL
+improvement follows from these checks. Frozen-BC BoN has CPU coverage, while
+a full real-model BoN rollout and the longer comparison remain unmeasured.
+
+The artifacts retain the exact tested data and code hashes. Later handoff
+edits tightened dataset-audit validation; the flow and optimizer implementation
+was unchanged. A new run must honor the launcher's exact-hash smoke gate.
 
 ## Primary references
 

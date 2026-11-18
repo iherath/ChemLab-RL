@@ -1,0 +1,19 @@
+{
+  "source_file": "wrapper_result.json",
+  "source_sha256": "b3a18d44ea4274bcb9e45a3d8381fa7d827e244a9e0fd8686ae15b93fadef06a",
+  "source_scope": "completed real-model optimizer integration smoke; four controls, no full-task evaluation",
+  "extracted": {
+    "run_result.json": {
+      "bytes": 1993,
+      "sha256": "b7e3e59fa0042fb82f676fc6483802cc1cc56f915d646390e3e665c1edc52857"
+    },
+    "evaluation.json": {
+      "bytes": 500,
+      "sha256": "fbe2650328cfffaedb166f19374336002d6263755c15356c3dc9e6ca9a653a05"
+    },
+    "density_check.json": {
+      "bytes": 288,
+      "sha256": "e70d5bff5ba4da8f18c85b565554ca9d7657af1f9ebf4ce859102a8dbcce2d69"
+    }
+  }
+}

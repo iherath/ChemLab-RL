@@ -1,0 +1,1947 @@
+{
+  "assembly_identity": "HDF5 semantic round trip; assembled byte hash is recorded after reconstruction",
+  "contact_scope": "historical episodes lack exhaustive substep audit; new episodes retain their acceptance metadata",
+  "episode_count": 98,
+  "episodes": [
+    {
+      "bytes": 29803256,
+      "controls_through_first_terminal": 1002,
+      "episode": "demo_0",
+      "origin": {
+        "collector": "grok_session_v2",
+        "source_dataset_sha256": "1d2fc0e3a809b1bb00ceb12b4fa99bc8d7c39175e9e39b5a1592d20d7c942950",
+        "source_episode": "demo_0"
+      },
+      "path": "shards/demo_000.hdf5",
+      "recorded_controls": 1175,
+      "sha256": "a2c5275f8e049085eb221bbf3bd5a950274bfbf0dd01e4e061b350ac0a7002a3",
+      "split": "train"
+    },
+    {
+      "bytes": 29669893,
+      "controls_through_first_terminal": 1001,
+      "episode": "demo_1",
+      "origin": {
+        "collector": "grok_session_v2",
+        "source_dataset_sha256": "1d2fc0e3a809b1bb00ceb12b4fa99bc8d7c39175e9e39b5a1592d20d7c942950",
+        "source_episode": "demo_1"
+      },
+      "path": "shards/demo_001.hdf5",
+      "recorded_controls": 1174,
+      "sha256": "231ab0526ad1211e997ae3e952e0e07deb9484870717b91188da9541cab4080e",
+      "split": "train"
+    },
+    {
+      "bytes": 30137306,
+      "controls_through_first_terminal": 1008,
+      "episode": "demo_2",
+      "origin": {
+        "collector": "grok_session_v2",
+        "source_dataset_sha256": "1d2fc0e3a809b1bb00ceb12b4fa99bc8d7c39175e9e39b5a1592d20d7c942950",
+        "source_episode": "demo_2"
+      },
+      "path": "shards/demo_002.hdf5",
+      "recorded_controls": 1181,
+      "sha256": "b7afdcc2c67fd1e4438624e7384d64670558331f751d1042ec58d169001ed22d",
+      "split": "train"
+    },
+    {
+      "bytes": 30357435,
+      "controls_through_first_terminal": 1019,
+      "episode": "demo_3",
+      "origin": {
+        "collector": "grok_session_v2",
+        "source_dataset_sha256": "1d2fc0e3a809b1bb00ceb12b4fa99bc8d7c39175e9e39b5a1592d20d7c942950",
+        "source_episode": "demo_3"
+      },
+      "path": "shards/demo_003.hdf5",
+      "recorded_controls": 1192,
+      "sha256": "ce2f31fff04e02b1f7b9b92c35cc0030392da94ab81b75f9766f6eb1ecca474c",
+      "split": "train"
+    },
+    {
+      "bytes": 37539831,
+      "controls_through_first_terminal": 1297,
+      "episode": "demo_4",
+      "origin": {
+        "collector": "grok_session_v2",
+        "source_dataset_sha256": "1d2fc0e3a809b1bb00ceb12b4fa99bc8d7c39175e9e39b5a1592d20d7c942950",
+        "source_episode": "demo_4"
+      },
+      "path": "shards/demo_004.hdf5",
+      "recorded_controls": 1470,
+      "sha256": "fff435b174ae44c3f9905e083b297095e1b70f25805f87212dc0bc9219ebbadf",
+      "split": "train"
+    },
+    {
+      "bytes": 32499604,
+      "controls_through_first_terminal": 1092,
+      "episode": "demo_5",
+      "origin": {
+        "collector": "grok_session_v2",
+        "source_dataset_sha256": "1d2fc0e3a809b1bb00ceb12b4fa99bc8d7c39175e9e39b5a1592d20d7c942950",
+        "source_episode": "demo_5"
+      },
+      "path": "shards/demo_005.hdf5",
+      "recorded_controls": 1265,
+      "sha256": "b5e198d80a7101713391cf795e62875ff63bdc5014db2d052520a8da70188988",
+      "split": "train"
+    },
+    {
+      "bytes": 30171632,
+      "controls_through_first_terminal": 1009,
+      "episode": "demo_6",
+      "origin": {
+        "collector": "grok_session_v2",
+        "source_dataset_sha256": "1d2fc0e3a809b1bb00ceb12b4fa99bc8d7c39175e9e39b5a1592d20d7c942950",
+        "source_episode": "demo_6"
+      },
+      "path": "shards/demo_006.hdf5",
+      "recorded_controls": 1182,
+      "sha256": "48d4947c88ea09ab85da0b86323e045675724ba3f84a54e96bfe8d9e72f98af4",
+      "split": "train"
+    },
+    {
+      "bytes": 30213019,
+      "controls_through_first_terminal": 1011,
+      "episode": "demo_7",
+      "origin": {
+        "collector": "grok_session_v2",
+        "source_dataset_sha256": "1d2fc0e3a809b1bb00ceb12b4fa99bc8d7c39175e9e39b5a1592d20d7c942950",
+        "source_episode": "demo_7"
+      },
+      "path": "shards/demo_007.hdf5",
+      "recorded_controls": 1184,
+      "sha256": "ca7d3028ea823d99f8019eb035e57515f426ae80d767e138be4c047188241d82",
+      "split": "heldout"
+    },
+    {
+      "bytes": 28547244,
+      "controls_through_first_terminal": 1078,
+      "episode": "demo_8",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4009,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_0",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_008.hdf5",
+      "recorded_controls": 1078,
+      "sha256": "ae66f91a6ab2ba45fe3b3ea4d3c009ca64efb040937430594c96349d9870c3c8",
+      "split": "train"
+    },
+    {
+      "bytes": 28382812,
+      "controls_through_first_terminal": 1074,
+      "episode": "demo_9",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4000,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_1",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_009.hdf5",
+      "recorded_controls": 1074,
+      "sha256": "f6410913a2ad466d01ecab811cc2f0a3bdb932df15fd8e46ccb21d5531e30fa7",
+      "split": "train"
+    },
+    {
+      "bytes": 29307992,
+      "controls_through_first_terminal": 1104,
+      "episode": "demo_10",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4002,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_2",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_010.hdf5",
+      "recorded_controls": 1104,
+      "sha256": "53b5da2f25b6eac2f09f093d6041dab5d4e5bc6dbc581a79b535882391104936",
+      "split": "train"
+    },
+    {
+      "bytes": 29481333,
+      "controls_through_first_terminal": 1110,
+      "episode": "demo_11",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4005,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_3",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_011.hdf5",
+      "recorded_controls": 1110,
+      "sha256": "4919ecab4e4ddb8df03965209731e17f7b9aeaefa7753a2de61ce9de0b8d9ac0",
+      "split": "train"
+    },
+    {
+      "bytes": 29456013,
+      "controls_through_first_terminal": 1110,
+      "episode": "demo_12",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4006,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_4",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_012.hdf5",
+      "recorded_controls": 1110,
+      "sha256": "86c5fc292298172947e455773feda677b8462b49df8e645635aa647199cd332b",
+      "split": "train"
+    },
+    {
+      "bytes": 28851296,
+      "controls_through_first_terminal": 1097,
+      "episode": "demo_13",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4001,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_5",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_013.hdf5",
+      "recorded_controls": 1097,
+      "sha256": "7a3caf3390e80a1cc5ac6303fea2f0bdbcd57f890ab67d22a8acdda4b86bf5b8",
+      "split": "train"
+    },
+    {
+      "bytes": 29115708,
+      "controls_through_first_terminal": 1102,
+      "episode": "demo_14",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4008,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_6",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_014.hdf5",
+      "recorded_controls": 1102,
+      "sha256": "a698f73eddd34652f0f69567b37fb9a67b7cad1bfe9f1a4954327fcfe4fce42c",
+      "split": "train"
+    },
+    {
+      "bytes": 28267305,
+      "controls_through_first_terminal": 1073,
+      "episode": "demo_15",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4003,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_7",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_015.hdf5",
+      "recorded_controls": 1073,
+      "sha256": "2b312543ac2765dd375a8531a6a22793a61d6446d65cf6c0a0936c85b448738a",
+      "split": "train"
+    },
+    {
+      "bytes": 28458659,
+      "controls_through_first_terminal": 1077,
+      "episode": "demo_16",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4004,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_8",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_016.hdf5",
+      "recorded_controls": 1077,
+      "sha256": "d9c47de46c73206e9aca06b048dc22278d5a9cf95269713dfc980de3f2602a5a",
+      "split": "train"
+    },
+    {
+      "bytes": 29090832,
+      "controls_through_first_terminal": 1096,
+      "episode": "demo_17",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4007,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_9",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_017.hdf5",
+      "recorded_controls": 1096,
+      "sha256": "7fdd5704da78ac38b5def1099e59e40dee9da913150193ccd10b7509ea850133",
+      "split": "train"
+    },
+    {
+      "bytes": 28252032,
+      "controls_through_first_terminal": 1069,
+      "episode": "demo_18",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4016,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_10",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_018.hdf5",
+      "recorded_controls": 1069,
+      "sha256": "90168bf2d4396c6ed564ebdc9acb39e034467558fd4d022ca8c558fbc2a69713",
+      "split": "train"
+    },
+    {
+      "bytes": 28315804,
+      "controls_through_first_terminal": 1071,
+      "episode": "demo_19",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4017,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_11",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_019.hdf5",
+      "recorded_controls": 1071,
+      "sha256": "93881259db940004b87b24165584961474b377d7812b2a89f256eb8e32529f50",
+      "split": "train"
+    },
+    {
+      "bytes": 28816587,
+      "controls_through_first_terminal": 1086,
+      "episode": "demo_20",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4019,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_12",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_020.hdf5",
+      "recorded_controls": 1086,
+      "sha256": "39d2364e0f0bb7e618db232c12e06a4e0e8d66238862e71e069e2f3630e9aa17",
+      "split": "train"
+    },
+    {
+      "bytes": 29426268,
+      "controls_through_first_terminal": 1109,
+      "episode": "demo_21",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4015,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_13",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_021.hdf5",
+      "recorded_controls": 1109,
+      "sha256": "0975a98190889d1a88f187da83bbc58ffae30dd9f43aa2fd5fbaa452acc2c2bb",
+      "split": "train"
+    },
+    {
+      "bytes": 29318229,
+      "controls_through_first_terminal": 1110,
+      "episode": "demo_22",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4010,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_14",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_022.hdf5",
+      "recorded_controls": 1110,
+      "sha256": "813acf324dcd0f8f1c1681e177602e95d63797dc760c71d6a4a93d26a384849a",
+      "split": "train"
+    },
+    {
+      "bytes": 28475629,
+      "controls_through_first_terminal": 1074,
+      "episode": "demo_23",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4018,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_15",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_023.hdf5",
+      "recorded_controls": 1074,
+      "sha256": "dc9531f1b9fa68162eebb194c788930bc0eb0d01fa72a6f621f19b488be86568",
+      "split": "train"
+    },
+    {
+      "bytes": 28668842,
+      "controls_through_first_terminal": 1082,
+      "episode": "demo_24",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4013,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_16",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_024.hdf5",
+      "recorded_controls": 1082,
+      "sha256": "7a1d0a2ef95979b96526c810df843a0cf14976797f94fce711ad8e39b2d1e62b",
+      "split": "train"
+    },
+    {
+      "bytes": 28770000,
+      "controls_through_first_terminal": 1086,
+      "episode": "demo_25",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4014,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_17",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_025.hdf5",
+      "recorded_controls": 1086,
+      "sha256": "1c36de6bfd4629f140d31434ce6755dfe6d75bebaa527e8ecefcae27b41b31d3",
+      "split": "train"
+    },
+    {
+      "bytes": 28459567,
+      "controls_through_first_terminal": 1077,
+      "episode": "demo_26",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4012,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_18",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_026.hdf5",
+      "recorded_controls": 1077,
+      "sha256": "90b928e11c038b38b86d9a52e1f0853ea2f169c599f9f3ef0814a966c07a6895",
+      "split": "train"
+    },
+    {
+      "bytes": 28261037,
+      "controls_through_first_terminal": 1075,
+      "episode": "demo_27",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4011,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_19",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_027.hdf5",
+      "recorded_controls": 1075,
+      "sha256": "5ec17d812fb772ee72cffbf3a83b1e73028826e9567197bb1080c8c064c80161",
+      "split": "train"
+    },
+    {
+      "bytes": 28519821,
+      "controls_through_first_terminal": 1076,
+      "episode": "demo_28",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4027,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_20",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_028.hdf5",
+      "recorded_controls": 1076,
+      "sha256": "9d9ee692efe25d46cc5a9d3abc2f20ba32d329462a20689ea630b5cfdd92c977",
+      "split": "train"
+    },
+    {
+      "bytes": 29346238,
+      "controls_through_first_terminal": 1104,
+      "episode": "demo_29",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4021,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_21",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_029.hdf5",
+      "recorded_controls": 1104,
+      "sha256": "b1d3f358fc8278199a60dbac6cecd7fa32788992b40494d43434256e4cec35a7",
+      "split": "train"
+    },
+    {
+      "bytes": 28744897,
+      "controls_through_first_terminal": 1088,
+      "episode": "demo_30",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4020,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_22",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_030.hdf5",
+      "recorded_controls": 1088,
+      "sha256": "22f43d110eb21d5e680e3643f50eb08c8d70d70b51cc1efcdff14e115b8508a7",
+      "split": "train"
+    },
+    {
+      "bytes": 29645468,
+      "controls_through_first_terminal": 1115,
+      "episode": "demo_31",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4025,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_23",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_031.hdf5",
+      "recorded_controls": 1115,
+      "sha256": "8a89081097cb67ecb64e3bb37801383e76d484350304573a55555bd17b8b4bf2",
+      "split": "train"
+    },
+    {
+      "bytes": 28941175,
+      "controls_through_first_terminal": 1095,
+      "episode": "demo_32",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4024,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_24",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_032.hdf5",
+      "recorded_controls": 1095,
+      "sha256": "a786230cb1b3c94fc345e64ad3effe45acf1f00f835538c7dbaba2f92af9ac08",
+      "split": "train"
+    },
+    {
+      "bytes": 28681033,
+      "controls_through_first_terminal": 1087,
+      "episode": "demo_33",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4023,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_25",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_033.hdf5",
+      "recorded_controls": 1087,
+      "sha256": "f373c64e5bedfe00773fe2bfd5fc4a4381c5e2d656469a2de705600526d593bd",
+      "split": "train"
+    },
+    {
+      "bytes": 29188469,
+      "controls_through_first_terminal": 1099,
+      "episode": "demo_34",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4022,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_26",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_034.hdf5",
+      "recorded_controls": 1099,
+      "sha256": "6cd3e938b30394cae58936a8329d7b0d274ba645b21d269f717e4241802c5aea",
+      "split": "train"
+    },
+    {
+      "bytes": 28899765,
+      "controls_through_first_terminal": 1093,
+      "episode": "demo_35",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4026,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_27",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_035.hdf5",
+      "recorded_controls": 1093,
+      "sha256": "2c122dab0447b3d7fc394732b4e9438cd14eb3caa9750b7fbfe04e88dfaf2523",
+      "split": "train"
+    },
+    {
+      "bytes": 29358894,
+      "controls_through_first_terminal": 1111,
+      "episode": "demo_36",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4028,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_28",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_036.hdf5",
+      "recorded_controls": 1111,
+      "sha256": "e2c114390db66cd5ce07af08eefab67b2f68be67c190c3f42f2bb0141e4b9896",
+      "split": "train"
+    },
+    {
+      "bytes": 29743910,
+      "controls_through_first_terminal": 1119,
+      "episode": "demo_37",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4029,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_29",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_037.hdf5",
+      "recorded_controls": 1119,
+      "sha256": "9f0416339bfc1a7d9aedf76ab5bd68bfae0bd7fb2837e97084018ef0b673de18",
+      "split": "train"
+    },
+    {
+      "bytes": 28454232,
+      "controls_through_first_terminal": 1073,
+      "episode": "demo_38",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4039,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_30",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_038.hdf5",
+      "recorded_controls": 1073,
+      "sha256": "57c82220d8ccbf0658fbcf0d8cbddcb1235c34f8f173912b0fa35ed778758946",
+      "split": "train"
+    },
+    {
+      "bytes": 28664811,
+      "controls_through_first_terminal": 1080,
+      "episode": "demo_39",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4031,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_31",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_039.hdf5",
+      "recorded_controls": 1080,
+      "sha256": "e61d93c734d81a2ccf0880a53ddabb8c68222749403be8c4b1a64f0c16069c0b",
+      "split": "train"
+    },
+    {
+      "bytes": 28955058,
+      "controls_through_first_terminal": 1092,
+      "episode": "demo_40",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4035,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_32",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_040.hdf5",
+      "recorded_controls": 1092,
+      "sha256": "62a43f6d478d06c19b53365e8b682117360f84854444d650ff7c64fafb9724ac",
+      "split": "train"
+    },
+    {
+      "bytes": 29172457,
+      "controls_through_first_terminal": 1098,
+      "episode": "demo_41",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4033,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_33",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_041.hdf5",
+      "recorded_controls": 1098,
+      "sha256": "af21e9b184668c3df29cde44794e16ca47327dc915976d6a7df5ab04657e1b7a",
+      "split": "train"
+    },
+    {
+      "bytes": 28835379,
+      "controls_through_first_terminal": 1094,
+      "episode": "demo_42",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4034,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_34",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_042.hdf5",
+      "recorded_controls": 1094,
+      "sha256": "0ce14fcf7f2cefc1c99f50fb28713e6c034db7f13f641d0392cd87e69d10e0a0",
+      "split": "train"
+    },
+    {
+      "bytes": 29310836,
+      "controls_through_first_terminal": 1109,
+      "episode": "demo_43",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4038,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_35",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_043.hdf5",
+      "recorded_controls": 1109,
+      "sha256": "b8cc5a07df70e59b607715eb4eccaef298a33108a0c44468e7baa762b2106085",
+      "split": "train"
+    },
+    {
+      "bytes": 29336777,
+      "controls_through_first_terminal": 1112,
+      "episode": "demo_44",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4030,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_36",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_044.hdf5",
+      "recorded_controls": 1112,
+      "sha256": "a4b0af822e248a827dc088691045975be89448252f03dab177e77f14e4953cbf",
+      "split": "train"
+    },
+    {
+      "bytes": 28889776,
+      "controls_through_first_terminal": 1093,
+      "episode": "demo_45",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4032,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_37",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_045.hdf5",
+      "recorded_controls": 1093,
+      "sha256": "1be83b21f4f90aeadcd10bd056b67e50e5b346abf1cf62f8ec3e79250951835a",
+      "split": "train"
+    },
+    {
+      "bytes": 28903269,
+      "controls_through_first_terminal": 1087,
+      "episode": "demo_46",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4037,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_38",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_046.hdf5",
+      "recorded_controls": 1087,
+      "sha256": "89c7a34eca23e601755d4f181320e94d19e8e7466796e96365bf295654aa1332",
+      "split": "train"
+    },
+    {
+      "bytes": 28376096,
+      "controls_through_first_terminal": 1074,
+      "episode": "demo_47",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4036,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_39",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_047.hdf5",
+      "recorded_controls": 1074,
+      "sha256": "a442ae2bcaa337e9431aff86fab8d43b9bf530097b595dceb85db71eccd47b8c",
+      "split": "train"
+    },
+    {
+      "bytes": 29327852,
+      "controls_through_first_terminal": 1109,
+      "episode": "demo_48",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4043,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_40",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_048.hdf5",
+      "recorded_controls": 1109,
+      "sha256": "db654eaa7c3004dcbef7cca23f734eb5655996eb6e086fa19fcf52ffda39316e",
+      "split": "train"
+    },
+    {
+      "bytes": 28797346,
+      "controls_through_first_terminal": 1093,
+      "episode": "demo_49",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4042,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_41",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_049.hdf5",
+      "recorded_controls": 1093,
+      "sha256": "23354e465e820bac8fb498c1c56d4ee4c7345aa57e7f9d85cfeb9cdbd4aba22e",
+      "split": "train"
+    },
+    {
+      "bytes": 28801552,
+      "controls_through_first_terminal": 1085,
+      "episode": "demo_50",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4046,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_42",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_050.hdf5",
+      "recorded_controls": 1085,
+      "sha256": "fc88aa1af05f4c9df9ede12e019a1fdecdc24bb755d8c12afeeccc86ce5fc56a",
+      "split": "train"
+    },
+    {
+      "bytes": 28860505,
+      "controls_through_first_terminal": 1094,
+      "episode": "demo_51",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4049,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_43",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_051.hdf5",
+      "recorded_controls": 1094,
+      "sha256": "80d1cd5a076e69b8c2dbaeb77cb08a61dc852e7bbf0c1c9e8d36c4ed79b81259",
+      "split": "train"
+    },
+    {
+      "bytes": 29434947,
+      "controls_through_first_terminal": 1114,
+      "episode": "demo_52",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4040,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_44",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_052.hdf5",
+      "recorded_controls": 1114,
+      "sha256": "6bfa4779338b112cca77e7fc36cca17e32c60b1c8cd2f03510280d19cc0f941f",
+      "split": "train"
+    },
+    {
+      "bytes": 29270031,
+      "controls_through_first_terminal": 1102,
+      "episode": "demo_53",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4045,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_45",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_053.hdf5",
+      "recorded_controls": 1102,
+      "sha256": "e109c937b4671e0a7c0fe47b8317d610e66eb2218fa43ac3995956671ea57b9a",
+      "split": "train"
+    },
+    {
+      "bytes": 29536643,
+      "controls_through_first_terminal": 1114,
+      "episode": "demo_54",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4041,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_46",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_054.hdf5",
+      "recorded_controls": 1114,
+      "sha256": "e78e02c74c3fa673cd1608f4b0df15fcbf2850e0d0a61c9e9e7b8329a9bce0a1",
+      "split": "train"
+    },
+    {
+      "bytes": 28405030,
+      "controls_through_first_terminal": 1075,
+      "episode": "demo_55",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4044,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_47",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_055.hdf5",
+      "recorded_controls": 1075,
+      "sha256": "e1b3ff7cf8d55a6b7b274a2b0617a316eef4820cddcef1ab3c1bf60d76bf1450",
+      "split": "train"
+    },
+    {
+      "bytes": 28747889,
+      "controls_through_first_terminal": 1084,
+      "episode": "demo_56",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4047,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_48",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_056.hdf5",
+      "recorded_controls": 1084,
+      "sha256": "ef52d44f680c59bbe24e8ba085b299612ad52e52e4258095d309669465025cf4",
+      "split": "train"
+    },
+    {
+      "bytes": 28637407,
+      "controls_through_first_terminal": 1084,
+      "episode": "demo_57",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4048,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_49",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_057.hdf5",
+      "recorded_controls": 1084,
+      "sha256": "6d5d45b9c80c5cbafd881dda0f267e0b7ec86e8bd4b5c77388936c22a5472c2a",
+      "split": "train"
+    },
+    {
+      "bytes": 29243335,
+      "controls_through_first_terminal": 1107,
+      "episode": "demo_58",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4056,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_50",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_058.hdf5",
+      "recorded_controls": 1107,
+      "sha256": "3d71ab2bc6ff8bb92dd4c21d18f6e17b1aad1cbd87a95f57369fcfbeac15e701",
+      "split": "train"
+    },
+    {
+      "bytes": 29491272,
+      "controls_through_first_terminal": 1111,
+      "episode": "demo_59",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4055,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_51",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_059.hdf5",
+      "recorded_controls": 1111,
+      "sha256": "0b5052375417f519915fde9f4564e3cd61b67a6d57907d6148155f92c2d052af",
+      "split": "train"
+    },
+    {
+      "bytes": 29605116,
+      "controls_through_first_terminal": 1113,
+      "episode": "demo_60",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4050,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_52",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_060.hdf5",
+      "recorded_controls": 1113,
+      "sha256": "06f82ca0146ab4958cdf8a62aa03b041a781b079bd59db8d6499c97284145847",
+      "split": "train"
+    },
+    {
+      "bytes": 28875628,
+      "controls_through_first_terminal": 1088,
+      "episode": "demo_61",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4057,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_53",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_061.hdf5",
+      "recorded_controls": 1088,
+      "sha256": "8b06861e6cd86bddf2950ddc6e4e164f912861c6ee9c1977f04019bb859d2ac5",
+      "split": "train"
+    },
+    {
+      "bytes": 28534267,
+      "controls_through_first_terminal": 1080,
+      "episode": "demo_62",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4052,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_54",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_062.hdf5",
+      "recorded_controls": 1080,
+      "sha256": "839908a79547075521665d68986c2e58ac5919dfd45dbb95f70f76e224936f28",
+      "split": "train"
+    },
+    {
+      "bytes": 28896856,
+      "controls_through_first_terminal": 1099,
+      "episode": "demo_63",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4058,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_55",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_063.hdf5",
+      "recorded_controls": 1099,
+      "sha256": "a8ba5cc581f5d30b2152532afca793ed5e44f13b93ea6894bd83b613e0f45fb3",
+      "split": "train"
+    },
+    {
+      "bytes": 29697448,
+      "controls_through_first_terminal": 1118,
+      "episode": "demo_64",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4053,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_56",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_064.hdf5",
+      "recorded_controls": 1118,
+      "sha256": "30cc77a8cc6eb435d35224e2416558dc9c8d8bdf9bf0892fdea863cfd29a71c1",
+      "split": "train"
+    },
+    {
+      "bytes": 29148524,
+      "controls_through_first_terminal": 1100,
+      "episode": "demo_65",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4051,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_57",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_065.hdf5",
+      "recorded_controls": 1100,
+      "sha256": "f680a9284b0aa39944f2d812c36c21272380de78616a5f7f62b8b12d5efcad87",
+      "split": "train"
+    },
+    {
+      "bytes": 28602644,
+      "controls_through_first_terminal": 1083,
+      "episode": "demo_66",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4054,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_58",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_066.hdf5",
+      "recorded_controls": 1083,
+      "sha256": "3d4bd6dd331b698a13d3d8984a74f5a6dbe386a9e16cfe6158f4bc315ecd0bd1",
+      "split": "train"
+    },
+    {
+      "bytes": 28900784,
+      "controls_through_first_terminal": 1088,
+      "episode": "demo_67",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4059,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_59",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_067.hdf5",
+      "recorded_controls": 1088,
+      "sha256": "945e40f0e308c843b5957196509124a8f6f27209e356d1b3d1f86742022dd217",
+      "split": "train"
+    },
+    {
+      "bytes": 28553958,
+      "controls_through_first_terminal": 1081,
+      "episode": "demo_68",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4068,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_60",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_068.hdf5",
+      "recorded_controls": 1081,
+      "sha256": "9892227b4c1e396f66f0237176789e33ae88475e63d6102522512ed068a25783",
+      "split": "train"
+    },
+    {
+      "bytes": 29248399,
+      "controls_through_first_terminal": 1107,
+      "episode": "demo_69",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4064,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_61",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_069.hdf5",
+      "recorded_controls": 1107,
+      "sha256": "6c66b39d226e8f9291cc977bdf73a53e4eea754d58cc7e0d91fd25a878f381ae",
+      "split": "train"
+    },
+    {
+      "bytes": 29268400,
+      "controls_through_first_terminal": 1102,
+      "episode": "demo_70",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4063,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_62",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_070.hdf5",
+      "recorded_controls": 1102,
+      "sha256": "a1f30b4c17ae6b55d68c8d8d6c31a377f2f8ad2209b5831562b0e908e75184be",
+      "split": "train"
+    },
+    {
+      "bytes": 28614786,
+      "controls_through_first_terminal": 1079,
+      "episode": "demo_71",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4067,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_63",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_071.hdf5",
+      "recorded_controls": 1079,
+      "sha256": "d4ddc61b71f2da52bd11d0df3bcac8dce33f49c4af72079a040d372a274a0afe",
+      "split": "train"
+    },
+    {
+      "bytes": 29257438,
+      "controls_through_first_terminal": 1101,
+      "episode": "demo_72",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4065,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_64",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_072.hdf5",
+      "recorded_controls": 1101,
+      "sha256": "5a4b965a5b8eb7ecdb997aa5dcae7c705a899dc0308acb0c7b96ec290b502c9e",
+      "split": "train"
+    },
+    {
+      "bytes": 29498631,
+      "controls_through_first_terminal": 1110,
+      "episode": "demo_73",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4069,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_65",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_073.hdf5",
+      "recorded_controls": 1110,
+      "sha256": "88d7d26558d78b96d949f7b05881470b0db0df2f278744a040e49f2bb42eb2ed",
+      "split": "train"
+    },
+    {
+      "bytes": 28740504,
+      "controls_through_first_terminal": 1088,
+      "episode": "demo_74",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4060,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_66",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_074.hdf5",
+      "recorded_controls": 1088,
+      "sha256": "b18852db3066ecbb33a30d8f227994a21e3f390653fea4e857ddb659822923e1",
+      "split": "train"
+    },
+    {
+      "bytes": 29238601,
+      "controls_through_first_terminal": 1100,
+      "episode": "demo_75",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4066,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_67",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_075.hdf5",
+      "recorded_controls": 1100,
+      "sha256": "6ce0121d3b5c0f9f61e9256e20a01830da6b3ce6f6c3b8bf5cc016706df0925a",
+      "split": "train"
+    },
+    {
+      "bytes": 29522668,
+      "controls_through_first_terminal": 1112,
+      "episode": "demo_76",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4061,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_68",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_076.hdf5",
+      "recorded_controls": 1112,
+      "sha256": "c4421bae05446c0ba03c48d5700c2e02729619f10eae34526dcf43f87d23262c",
+      "split": "train"
+    },
+    {
+      "bytes": 28883384,
+      "controls_through_first_terminal": 1090,
+      "episode": "demo_77",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4062,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_69",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_077.hdf5",
+      "recorded_controls": 1090,
+      "sha256": "6ebc3b10c63d3f866e14dda371b00f482b0940e870717038ec476ceffeec8985",
+      "split": "train"
+    },
+    {
+      "bytes": 29075472,
+      "controls_through_first_terminal": 1095,
+      "episode": "demo_78",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4071,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_70",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_078.hdf5",
+      "recorded_controls": 1095,
+      "sha256": "d6339bc3aa32465faf44cff4b8e86e654bde2b45a531e2c3e265b0c6f3aceed7",
+      "split": "train"
+    },
+    {
+      "bytes": 29716300,
+      "controls_through_first_terminal": 1118,
+      "episode": "demo_79",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4070,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_71",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_079.hdf5",
+      "recorded_controls": 1118,
+      "sha256": "8eb98462dc3ab954ad1e2d09fc8023a881d4a509ab3c92215a564581b7cea50f",
+      "split": "train"
+    },
+    {
+      "bytes": 28923591,
+      "controls_through_first_terminal": 1096,
+      "episode": "demo_80",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4075,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_72",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_080.hdf5",
+      "recorded_controls": 1096,
+      "sha256": "a7438a0dda228e5a4daeb1557e718d6b12990bbeff2f6ef557d34f0332b1a070",
+      "split": "train"
+    },
+    {
+      "bytes": 29400770,
+      "controls_through_first_terminal": 1107,
+      "episode": "demo_81",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4074,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_73",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_081.hdf5",
+      "recorded_controls": 1107,
+      "sha256": "9d54129236b3c7ebf3344b52f2114e1bc7e36a7ef582c275ae858df5c8c5ac59",
+      "split": "train"
+    },
+    {
+      "bytes": 28738683,
+      "controls_through_first_terminal": 1081,
+      "episode": "demo_82",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4073,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_74",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_082.hdf5",
+      "recorded_controls": 1081,
+      "sha256": "73eac5cf45a4251dcc668275b9fc6acb5f5db5eca74a36f7bffad8173e6cfabc",
+      "split": "train"
+    },
+    {
+      "bytes": 28881567,
+      "controls_through_first_terminal": 1087,
+      "episode": "demo_83",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4079,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_75",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_083.hdf5",
+      "recorded_controls": 1087,
+      "sha256": "a97051f89cdb75cf5311f857709576bdc7d4ea393a337468c737592903046ca2",
+      "split": "train"
+    },
+    {
+      "bytes": 29266264,
+      "controls_through_first_terminal": 1100,
+      "episode": "demo_84",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4078,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_76",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_084.hdf5",
+      "recorded_controls": 1100,
+      "sha256": "e8c873beb9e9f1d9a237413a4060ded22614a0193e6c627bf728629b7018afe0",
+      "split": "train"
+    },
+    {
+      "bytes": 29116853,
+      "controls_through_first_terminal": 1102,
+      "episode": "demo_85",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4076,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_77",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_085.hdf5",
+      "recorded_controls": 1102,
+      "sha256": "92398fa581ab1adf9cd30ac72c2d5cb3e4aa23f3fde3afa0e79db2c8c2a4d299",
+      "split": "train"
+    },
+    {
+      "bytes": 29431644,
+      "controls_through_first_terminal": 1114,
+      "episode": "demo_86",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4072,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_78",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_086.hdf5",
+      "recorded_controls": 1114,
+      "sha256": "da1f287dbb0d142abd1096556f97471a4ffc3db0879d01e5758a459a80dbeb18",
+      "split": "train"
+    },
+    {
+      "bytes": 29582861,
+      "controls_through_first_terminal": 1114,
+      "episode": "demo_87",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4077,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_79",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_087.hdf5",
+      "recorded_controls": 1114,
+      "sha256": "c1076cd48fbe4dc8062a78d8e70ec3838ab56fcbb78fe5f68368103262441c68",
+      "split": "train"
+    },
+    {
+      "bytes": 28702433,
+      "controls_through_first_terminal": 1083,
+      "episode": "demo_88",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4098,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_80",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_088.hdf5",
+      "recorded_controls": 1083,
+      "sha256": "dd55d7da27a0eaf3f5f65017c383bd47b956eb6d2abb8b42c0f205c9af53edb1",
+      "split": "train"
+    },
+    {
+      "bytes": 28557822,
+      "controls_through_first_terminal": 1076,
+      "episode": "demo_89",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4091,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_81",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_089.hdf5",
+      "recorded_controls": 1076,
+      "sha256": "3463cba7f0a67892ae4a7dcad292b811d8cefaefe9e69aa41b36f1a8ebfc623e",
+      "split": "train"
+    },
+    {
+      "bytes": 28778216,
+      "controls_through_first_terminal": 1087,
+      "episode": "demo_90",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4090,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_82",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_090.hdf5",
+      "recorded_controls": 1087,
+      "sha256": "dceeb314c6b504844065bd64830304c4c29f8918331927d08f2767a0495ca545",
+      "split": "train"
+    },
+    {
+      "bytes": 28401868,
+      "controls_through_first_terminal": 1072,
+      "episode": "demo_91",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4097,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_83",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_091.hdf5",
+      "recorded_controls": 1072,
+      "sha256": "3a53f201cceea04bbcdefc633b9976e52c456e717033906d1ba960729bbb9f75",
+      "split": "train"
+    },
+    {
+      "bytes": 28464263,
+      "controls_through_first_terminal": 1077,
+      "episode": "demo_92",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4096,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_84",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_092.hdf5",
+      "recorded_controls": 1077,
+      "sha256": "70c98ee8c3e28cbdfb1aec887fbf5df3667e7ef0f63de750c4c1647b5d91406a",
+      "split": "train"
+    },
+    {
+      "bytes": 29086910,
+      "controls_through_first_terminal": 1094,
+      "episode": "demo_93",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4094,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_85",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_093.hdf5",
+      "recorded_controls": 1094,
+      "sha256": "01fad6f38983a2e442e148ae72d4dba799d6cd0b898731477a6c54ca0b0b0b4a",
+      "split": "train"
+    },
+    {
+      "bytes": 28057599,
+      "controls_through_first_terminal": 1068,
+      "episode": "demo_94",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4099,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_86",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_094.hdf5",
+      "recorded_controls": 1068,
+      "sha256": "028451ea49fa3d73bb2d6333ea576c147d8ee78bf36182bfc9c1cf60c813d197",
+      "split": "train"
+    },
+    {
+      "bytes": 29030856,
+      "controls_through_first_terminal": 1094,
+      "episode": "demo_95",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4095,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_87",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_095.hdf5",
+      "recorded_controls": 1094,
+      "sha256": "6e8f50e20c75fb381e3947d18e235c3d6cc0c36abf42bca91f55e85c199de0b8",
+      "split": "train"
+    },
+    {
+      "bytes": 28716595,
+      "controls_through_first_terminal": 1084,
+      "episode": "demo_96",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4093,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_88",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_096.hdf5",
+      "recorded_controls": 1084,
+      "sha256": "3672c4c320ae40b0da35715105baae766ff57ec6a0a3457c533e2e1be95c8307",
+      "split": "train"
+    },
+    {
+      "bytes": 28911843,
+      "controls_through_first_terminal": 1094,
+      "episode": "demo_97",
+      "origin": {
+        "collector": "audited_continuous_vial_v1",
+        "collector_sha256": "1cf968ba3bcb8a5ccce1f77fad9391730310b957f39c262a7ca020759b577214",
+        "physical_valid": true,
+        "physics_validation": "native_vial_substep_contacts_v1",
+        "seed": 4092,
+        "source_dataset_sha256": "5e5250f610e2e36744a8413ae434db25f7e33e0ec31ce0322534c130824d0d3f",
+        "source_episode": "demo_89",
+        "source_version": "sha256:84d3ae7378f056117420ad39c1b4fe31be541d9d3bb85d303ea246a81a153f06"
+      },
+      "path": "shards/demo_097.hdf5",
+      "recorded_controls": 1094,
+      "sha256": "941fbcd80c51cdec0203377d4708b248d4f683a7e5f779f312f3c9dea95769f2",
+      "split": "train"
+    }
+  ],
+  "file_byte_limit": 99614720,
+  "fixed_scene": true,
+  "initial_condition_generalization": false,
+  "metadata": {
+    "bytes": 6144,
+    "path": "metadata.hdf5",
+    "sha256": "342beed805bb40bce1f8ff74000ef1704f93b3272ad44c2cf20a9ff26d7b135f"
+  },
+  "schema": "vial_hdf_shards_v1",
+  "source_combined_bytes": 2856425063,
+  "source_combined_file": "weigh_vial_hybrid98.hdf5",
+  "source_combined_sha256": "d5aebc989c6ea12cff95aeb95132a6881ec824a9ae9a6b8648a834fcfa3fdc31",
+  "split": {
+    "excluded_episodes": [],
+    "heldout_episodes": [
+      "demo_7"
+    ],
+    "train_episodes": [
+      "demo_0",
+      "demo_1",
+      "demo_2",
+      "demo_3",
+      "demo_4",
+      "demo_5",
+      "demo_6",
+      "demo_8",
+      "demo_9",
+      "demo_10",
+      "demo_11",
+      "demo_12",
+      "demo_13",
+      "demo_14",
+      "demo_15",
+      "demo_16",
+      "demo_17",
+      "demo_18",
+      "demo_19",
+      "demo_20",
+      "demo_21",
+      "demo_22",
+      "demo_23",
+      "demo_24",
+      "demo_25",
+      "demo_26",
+      "demo_27",
+      "demo_28",
+      "demo_29",
+      "demo_30",
+      "demo_31",
+      "demo_32",
+      "demo_33",
+      "demo_34",
+      "demo_35",
+      "demo_36",
+      "demo_37",
+      "demo_38",
+      "demo_39",
+      "demo_40",
+      "demo_41",
+      "demo_42",
+      "demo_43",
+      "demo_44",
+      "demo_45",
+      "demo_46",
+      "demo_47",
+      "demo_48",
+      "demo_49",
+      "demo_50",
+      "demo_51",
+      "demo_52",
+      "demo_53",
+      "demo_54",
+      "demo_55",
+      "demo_56",
+      "demo_57",
+      "demo_58",
+      "demo_59",
+      "demo_60",
+      "demo_61",
+      "demo_62",
+      "demo_63",
+      "demo_64",
+      "demo_65",
+      "demo_66",
+      "demo_67",
+      "demo_68",
+      "demo_69",
+      "demo_70",
+      "demo_71",
+      "demo_72",
+      "demo_73",
+      "demo_74",
+      "demo_75",
+      "demo_76",
+      "demo_77",
+      "demo_78",
+      "demo_79",
+      "demo_80",
+      "demo_81",
+      "demo_82",
+      "demo_83",
+      "demo_84",
+      "demo_85",
+      "demo_86",
+      "demo_87",
+      "demo_88",
+      "demo_89",
+      "demo_90",
+      "demo_91",
+      "demo_92",
+      "demo_93",
+      "demo_94",
+      "demo_95",
+      "demo_96",
+      "demo_97"
+    ]
+  },
+  "task_id": "vial_placement_native_v1"
+}
