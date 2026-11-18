@@ -1,0 +1,237 @@
+% Overleaf: upload this folder (or this file) and compile with pdfLaTeX.
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,mathtools}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{xcolor}
+\usepackage{colortbl}
+\usepackage{enumitem}
+\usepackage[hidelinks]{hyperref}
+
+\definecolor{donegray}{RGB}{210,210,210}
+\definecolor{weightorange}{RGB}{255,224,178}
+\definecolor{vadarred}{RGB}{160,30,30}
+
+\newcommand{\vadar}[1]{\textcolor{vadarred}{#1}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\E}{\mathbb{E}}
+
+\title{Long-Horizon RL:\\
+Hierarchical Goal Conditioning and Value Disaggregation}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+\thispagestyle{empty}
+
+\begin{abstract}
+\noindent
+Long-horizon tasks make credit assignment hard because the reward is sparse.
+These notes compare the usual fix, hierarchical goal conditioning, with value disaggregation (VaDar).
+VaDar keeps a single subgoal-independent policy and uses subgoals only to train and combine critics.
+The practical section is the five-line wrapper that turns a value-based method such as SAC, FQL, or OGPO into VaDar.
+\end{abstract}
+
+\section{The problem}
+A long-horizon task is finished only after many steps, and the reward that marks success is sparse.
+The learning problem is credit assignment: which early actions were responsible for eventually finishing the task?
+One proposed solution is to decompose the task into subgoals and train a policy that is told which subgoal is active.
+That proposal is hierarchical goal conditioning.
+
+\section{Hierarchical goal conditioning}
+Let $G$ be an ordered set of subgoals. Write $\mathrm{done}_g(s)\in\{0,1\}$ for the indicator that subgoal $g$ is complete in state $s$.
+Under a sequential order the current subgoal is the first unfinished one,
+\[
+  g^{\mathrm{curr}} \;=\; \min\{g : \mathrm{done}_g = 0\}.
+\]
+HGC gives both the critic and the policy this index. The policy is $\pi_\theta(a\mid s,g)$, so deployment must know $g$.
+Each transition is rewarded by the sparse signal of the \emph{current} subgoal only,
+\[
+  r_{\mathrm{sparse}}(\mathrm{done})
+  \;=\;
+  \begin{cases}
+    r_{\mathrm{done}} & \text{if }\mathrm{done}=1,\\
+    -1 & \text{if }\mathrm{done}=0,
+  \end{cases}
+\]
+with $r_{\mathrm{done}}$ a small positive constant. Algorithm~\ref{alg:hgc} is the resulting actor--critic loop.
+Goal inputs, the part HGC adds to an ordinary value-based update, are the arguments in $G$.
+
+\begin{algorithm}[t]
+\caption{Hierarchical goal conditioning RL (HGC-RL)}
+\label{alg:hgc}
+\begin{algorithmic}[1]
+\State \textbf{Parameters:} discount $\gamma$; learning rate $\eta$
+\State Initialize $Q_\phi:S\times A\times G\to\R$,\;
+       $\pi_\theta:S\times G\to\Delta(A)$,\;
+       buffer $\mathcal{B}\leftarrow\emptyset$
+\For{episode $=1,2,\ldots$}
+  \While{episode not done}
+    \State $a_t\leftarrow\pi_\theta(s_t,g_t)$,\quad $s_{t+1}\sim P(s_t,a_t)$
+    \Comment{$g_t=g^{\mathrm{curr}}:=\min\{g:\mathrm{done}_g=0\}$}
+    \State $\mathcal{B}\leftarrow\mathcal{B}\cup\{(s_t,a_t,s_{t+1},r_t,g_t)\}$,\quad
+           $r_t\leftarrow r_{\mathrm{sparse}}(\mathrm{done}_{g_t})$
+    \For{a number of updates}
+      \State Sample $(s,a,s',r_g,g)\sim\mathcal{B}$ and $a'\sim\pi_\theta(s',g)$
+      \State $y^{\mathrm{target}}_g = r_g + \gamma\, Q_\phi(s',a',g)$
+      \Comment{target for the current goal}
+      \State $\phi\leftarrow\phi-\eta\nabla_\phi L_{\mathrm{critic}}\!\left(Q_\phi(\cdot,\cdot,g)\mid s,a,y^{\mathrm{target}}_g\right)$
+      \State $\theta\leftarrow\theta-\eta\nabla_\theta L_{\mathrm{policy}}\!\left(\pi_\theta(\cdot,g)\mid s,a,Q_\phi(\cdot,\cdot,g)\right)$
+    \EndFor
+  \EndWhile
+\EndFor
+\end{algorithmic}
+\end{algorithm}
+
+\section{Three limitations}
+\begin{enumerate}[leftmargin=1.4em,itemsep=0.4em]
+  \item \textbf{Subgoal completion must be evaluated at deployment.}
+        Supplying $g_t$ to $\pi_\theta$ requires an expert, a hand-written detector, or an expensive model call on every step.
+  \item \textbf{Optimizing the current subgoal is myopic.}
+        The policy is updated against $Q(\cdot,\cdot,g^{\mathrm{curr}})$ alone, so it can finish the current subgoal in a way that makes a later subgoal harder.
+        Future actions are not part of the policy objective.
+  \item \textbf{The subgoals are forced into a sequence.}
+        Only one goal is active at a time, which does not fit tasks whose goals form a DAG or can be pursued together.
+\end{enumerate}
+
+Implicit HGC (iHGC) removes the goal input from the policy but keeps the goal-conditioned critic, and it still trains that policy on the current subgoal only.
+The policy no longer needs $g$ at test time, which answers limitation~1.
+Limitations~2 and~3 remain: the extraction is still myopic, and still sequential.
+
+\section{Value disaggregation}
+VaDar keeps one subgoal-independent policy $\pi_\theta(a\mid s)$ and moves the subgoal structure into the critic.
+\begin{enumerate}[leftmargin=1.4em,itemsep=0.4em]
+  \item The policy does not take a subgoal. Limitation~1 is gone at deployment; completion labels are used only while training.
+  \item The policy maximizes a weighted sum of per-subgoal critics, mixing the current subgoal with later ones.
+        That is the answer to myopic extraction (limitation~2).
+  \item Several critic heads can be active together, so the same wrapper applies to goal topologies that are not a single chain (limitation~3).
+\end{enumerate}
+
+At each environment step the learner records the full completion vector and a reward vector, not a single active goal:
+\[
+  \mathbf{d}_t = \{\mathrm{done}_g(s_{t+1})\}_{g\in G}\in\{0,1\}^{|G|},
+  \qquad
+  \mathbf{r}_t[g] = r_{\mathrm{sparse}}(\mathbf{d}_t[g]).
+\]
+The critic $Q_\phi(s,a,g)$ is trained on every head.
+The policy is trained on the aggregate
+\begin{equation}
+  Q_{\mathrm{agg}}(s,a)
+  \;=\;
+  \sum_{g\in G} \mathbf{w}[g]\, Q_\phi(s,a,g),
+  \qquad
+  \mathbf{w} \leftarrow \textsc{GetWeighting}(\mathbf{d}).
+  \label{eq:qagg}
+\end{equation}
+Algorithm~\ref{alg:vadar} is the full loop. The quantities VaDar adds to a standard actor--critic update are marked in red.
+
+\begin{algorithm}[t]
+\caption{Value disaggregation (VaDar)}
+\label{alg:vadar}
+\begin{algorithmic}[1]
+\State \textbf{Parameters:} discount $\gamma$; learning rate $\eta$; TD clipping parameter $c_{\mathrm{clip}}$
+\State Initialize goal-conditioned critic $Q_\phi:S\times A\times G\to\R$;\;
+       policy $\pi_\theta:S\to\Delta(A)$;\;
+       replay $\mathcal{B}\leftarrow\emptyset$
+\For{episode $=1,2,\ldots$}
+  \While{episode not done}
+    \State $a_t\leftarrow\pi_{\bar\theta}(s_t)$,\quad $s_{t+1}\sim P(s_t,a_t)$
+    \State \vadar{Evaluate $\mathbf{d}_t=\{\mathrm{done}_g(s_{t+1})\}_{g\in G}\in\{0,1\}^{|G|}$}
+    \State $\mathcal{B}\leftarrow\mathcal{B}\cup\{(s_t,a_t,s_{t+1},\vadar{\mathbf{r}_t,\mathbf{d}_t})\}$,\quad
+           \vadar{$\mathbf{r}_t[g]\leftarrow r_{\mathrm{sparse}}(\mathbf{d}_t[g])$}
+    \For{a number of updates}
+      \State Sample $(s,a,s',\vadar{\mathbf{r},\mathbf{d}})\sim\mathcal{B}$,\quad $a'\sim\pi_\theta(s')$
+      \State \vadar{$\mathbf{y}^{\mathrm{target}}[g]
+            =\min\{\mathbf{r}[g]+\gamma Q_\phi(s',a',g),\; c_{\mathrm{clip}}\cdot r_{\mathrm{done}}\}$}
+            \Comment{all-goal targets}
+      \State $\phi\leftarrow\phi-\eta\nabla_\phi
+            \vadar{\displaystyle\sum_{g\in G}}
+            L_{\mathrm{critic}}\!\left(Q_\phi(\cdot,\cdot,g)\mid s,a,\mathbf{y}^{\mathrm{target}}[g]\right)$
+            \Comment{multi-goal critic loss}
+      \State \vadar{$Q_{\mathrm{agg}}(\cdot,\cdot)\leftarrow\sum_g \mathbf{w}[g]\,Q_\phi(\cdot,\cdot,g)$},\;
+            \vadar{$\mathbf{w}\leftarrow\textsc{GetWeighting}(\mathbf{d})$}
+      \State $\theta\leftarrow\theta-\eta\nabla_\theta L_{\mathrm{policy}}(\pi_\theta\mid s,a,Q_{\mathrm{agg}})$
+    \EndFor
+  \EndWhile
+\EndFor
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Clipping completed subgoals}
+After a subgoal is done, $r_{\mathrm{sparse}}$ keeps paying $r_{\mathrm{done}}$ on every later step.
+An unclipped backup would accumulate to $r_{\mathrm{done}}/(1-\gamma)$.
+Line~10 of Algorithm~\ref{alg:vadar} stops that: the TD target of every head is capped at $c_{\mathrm{clip}}\cdot r_{\mathrm{done}}$.
+
+\subsection{Which heads the policy listens to}
+$\textsc{GetWeighting}$ does not renormalize. Each entry of $\mathbf{w}$ is $0$ or $1$, and $Q_{\mathrm{agg}}$ is the sum of the selected heads.
+For a chain, let $g^{\mathrm{curr}}$ be the first unfinished subgoal and let $g^{\mathrm{next}}$ be the subgoal after it, or the last subgoal if $g^{\mathrm{curr}}$ is already last.
+The four indicator rules are
+\begin{align*}
+  \text{current-myopic} &\quad \mathbf{w}[g]=\mathbf{1}[g=g^{\mathrm{curr}}],\\
+  \text{current-future} &\quad \mathbf{w}[g]=\mathbf{1}[g\succeq g^{\mathrm{curr}}],\\
+  \text{next-myopic} &\quad \mathbf{w}[g]=\mathbf{1}[g=g^{\mathrm{next}}],\\
+  \text{next-future} &\quad \mathbf{w}[g]=\mathbf{1}[g\succeq g^{\mathrm{next}}].
+\end{align*}
+Current-myopic is the HGC extraction, and it is the myopic one.
+Current-future still trains on the active subgoal, but it also trains on everything after it.
+Next-future drops the current head and optimizes only later unfinished subgoals, which is the manipulation default.
+Figure~\ref{fig:weights} is the same pattern on a length-5 chain whose first two subgoals are already done, so $g^{\mathrm{curr}}$ is the third subgoal and $g^{\mathrm{next}}$ is the fourth.
+
+\begin{figure}[t]
+\centering
+\begin{tabular}{@{}cc@{\hspace{1.2em}}cccc@{}}
+\toprule
+& & \multicolumn{2}{c}{current} & \multicolumn{2}{c}{next} \\
+\cmidrule(lr){3-4}\cmidrule(lr){5-6}
+done & & myopic & future & myopic & future \\
+\midrule
+\cellcolor{donegray}1 & & 0 & 0 & 0 & 0 \\
+\cellcolor{donegray}1 & & 0 & 0 & 0 & 0 \\
+0 & $g^{\mathrm{curr}}$ &
+  \cellcolor{weightorange}1 & \cellcolor{weightorange}1 & 0 & 0 \\
+0 & & 0 & \cellcolor{weightorange}1 &
+  \cellcolor{weightorange}1 & \cellcolor{weightorange}1 \\
+0 & & 0 & \cellcolor{weightorange}1 & 0 & \cellcolor{weightorange}1 \\
+\bottomrule
+\end{tabular}
+\caption{Subgoal weights from $\textsc{GetWeighting}$.
+Shaded done-bits are already complete.
+Orange entries are the heads that enter $Q_{\mathrm{agg}}$.
+In this example the third subgoal is current, so next-myopic selects only the fourth and next-future selects the fourth and fifth.}
+\label{fig:weights}
+\end{figure}
+
+The notes leave the shape of $\mathbf{w}$ open.
+Instead of a hard $0/1$ mask one could learn the weights, or replace the mask with a fixed distribution along the chain: exponentially decaying (emphasize the near subgoal), quadratic, or exponentially growing (emphasize later subgoals).
+Those are ablations on line~12, not changes to the critic update.
+
+\section{Practical guide}
+VaDar is a wrapper around any value-based method. SAC, FQL, and OGPO are the three named bases.
+The policy class and its loss stay whatever the base method uses.
+Only the critic interface changes:
+\begin{enumerate}[leftmargin=1.4em,itemsep=0.45em]
+  \item Change the critic output dimension from $1$ to $|G|$.
+        The trunk is shared across heads.
+        Ensemble aggregation (mean, min, \ldots) is applied independently to each head.
+  \item Store the completion vector $\mathbf{d}_t$ and the per-head reward $\mathbf{r}_t$ in the replay buffer, in place of a scalar reward and a single goal index.
+  \item Sum the critic loss over heads. Any regularizer $L_{\mathrm{reg}}$ is broadcast across heads.
+  \item Clip each head's TD target entrywise, as in line~10 of Algorithm~\ref{alg:vadar}.
+  \item In the policy loss, replace the scalar critic with the aggregate from~\eqref{eq:qagg},
+        \[
+          Q_{\mathrm{agg}}(s,a)
+          \;=\;
+          \big\langle \mathbf{w}(\mathbf{d}(s)),\, (Q_\phi(s,a,g))_{g\in G}\big\rangle.
+        \]
+        The policy is not conditioned on $g$.
+\end{enumerate}
+
+OGPO is one such base, not a second subgoal mechanism.
+Its off-policy critic still supplies the value that the policy extracts; VaDar only replaces that scalar value with $Q_{\mathrm{agg}}$ and trains every subgoal head.
+The same five steps apply to SAC and FQL.
+
+\end{document}
