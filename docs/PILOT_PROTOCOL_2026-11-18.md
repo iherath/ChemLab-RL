@@ -46,7 +46,12 @@ the complete approach, so it contributes no accepted demonstration.
 The revised explicit `candidate_batch` mode can start after a saved-state
 corrective continuation has validated the controller correction, loaded-tool
 lift, and actual receiver transfer. Its source hashes must match current code;
-its original failed parent and saved-state hashes are preserved. The unchanged
+the actual pre-tool-pickup regrasp snapshot, outcome, artifact manifest and
+CPU003 ancestor hashes are preserved. The failed first scoop motivates this
+test but is not its initial state. The regrasp artifact's seed remains unknown;
+its CPU003 source evidence remains explicitly local and remotely unverified.
+The gate rejects changes to native physics/assets and accepts only the two
+declared controller-script changes. The unchanged
 0.25 mm depth and 1 mm lateral loading guards must pass. The continuation must
 transfer more than 0.050 g, settle, conserve inventory, spill zero grains, pass
 contact checks, and show independent pan-force agreement within 0.010 g. It is

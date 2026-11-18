@@ -303,9 +303,57 @@ def _pick_tool(demo, env):
                      (origin, face)):
         if not demo.go("right", pos, rot):
             return None
-    if not demo.grip("right", True):
+    # The general waypoint controller tolerates centimetres of error. A
+    # cylindrical handle needs a centered pinch before closing: an offset
+    # pinch can squeeze it toward the edge and eject it under scoop load.
+    # Measure the resting handle, including its small tilt on the bench.
+    # The Robotiq pad patch lies 8.5 mm behind its pinch site along this
+    # approach axis. Center the physical pads, rather than the pinch marker,
+    # on the handle's 40 mm axial span.
+    pinch_offset = np.array([0., 0., .0085])
+    session = demo.session
+    arm = session.arms["right"]
+    aligned = 0
+    for _ in range(30):
+        body = env.data.body("spatula")
+        origin = body.xpos.copy()
+        tool_rotation = body.xmat.reshape(3, 3).copy()
+        face = tool_rotation @ np.diag([-1., 1., -1.])
+        session._scratch.qpos[:] = env.data.qpos
+        target = origin + tool_rotation @ pinch_offset
+        joints, pe, re = arm.ik(session._scratch, target, face,
+                                session.q_cmd["right"], iters=90, damping=.01)
+        if pe > .0005 or re > .002:
+            env.scene.bad = f"tool pregrasp IK miss {pe * 1000:.3f} mm/{re:.5f} rad"
+            return None
+        delta = joints - session.q_cmd["right"]
+        session.q_cmd["right"] += np.clip(.5 * delta, -.02, .02)
+        demo.scene.step(None)
+        pinch, rotation = arm.tool_pose()
+        body = env.data.body("spatula")
+        frame = body.xmat.reshape(3, 3)
+        error = np.linalg.norm(pinch - body.xpos - frame @ pinch_offset)
+        angle = legacy.rot_angle(rotation, frame @ np.diag([-1., 1., -1.]))
+        aligned = aligned + 1 if error <= .0005 and angle <= .002 else 0
+        if aligned >= 3:
+            break
+    else:
+        env.scene.bad = f"tool pregrasp not centered: {error * 1000:.3f} mm/{angle:.5f} rad"
         return None
-    return demo.latch("right", "spatula")
+    for value in np.linspace(session.grip_cmd["right"], 255., 31)[1:]:
+        session.grip_cmd["right"] = float(value)
+        demo.scene.step(None)
+    if not demo.idle(5):
+        return None
+    held = demo.latch("right", "spatula")
+    if held is None:
+        return None
+    body = env.data.body("spatula")
+    local = body.xmat.reshape(3, 3).T @ (arm.tool_pose()[0] - body.xpos)
+    if abs(local[0]) > .002 or abs(local[2] - pinch_offset[2]) > .004:
+        env.scene.bad = f"tool handle grasp off-center: shaft={local[0] * 1000:.3f} mm, axis={local[2] * 1000:.3f} mm"
+        return None
+    return held
 
 
 def _fine_tip(demo, env, spatula, tip, direction, speed=0.05):

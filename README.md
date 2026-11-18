@@ -1,4 +1,21 @@
-# 🧪⚡️ Cyclic voltammetry starter: VaDar + OGPO
+# ChemLab RL
+
+The current colleague handoff trains SmolVLA with BC, then compares frozen-BC
+best-of-N, scalar OGPO, and VaDar + OGPO on native MuJoCo vial placement. Start
+with the [training runbook](docs/VIAL_VLA_RUNBOOK.md) and
+[dataset/setup guide](docs/VIAL_DATASET.md). The setup pins Leo's simulator and
+robot submodule and creates the isolated training environment:
+
+```bash
+bash scripts/bootstrap_vial_training.sh
+```
+
+The [dataset guide](docs/VIAL_DATASET.md) provides the single-line command to
+assemble the Git-sized HDF5 shards. [Algorithm notes](docs/VIAL_ALGORITHMS.md)
+describe the shared success metric, auxiliary targets, and validation limits.
+Vial placement is a separate experiment from the full powder-transfer task.
+
+## Earlier CPU toy: cyclic voltammetry
 
 A CPU toy for trying [VaDar](https://arxiv.org/abs/2610.26629) (value disaggregation) with the policy update from [OGPO](https://arxiv.org/abs/2605.03065) (off-policy generative policy optimization) on a long-horizon lab task. Two arms weigh a solid, dispense electrolyte, seat cell and potentiostat leads, then let a voltammetry sweep finish.
 

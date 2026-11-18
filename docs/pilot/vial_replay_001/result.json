@@ -1,0 +1,16 @@
+{
+  "success": true,
+  "truncated": false,
+  "steps": 1002,
+  "expected_first_terminal": 1002,
+  "max_joint_replay_error": 2.384185791015625e-07,
+  "final_reading_g": 19.999999996181504,
+  "subgoals": [
+    1.0,
+    1.0,
+    1.0,
+    1.0
+  ],
+  "max_postcontrol_penetration_m": 0.0005123174934885677,
+  "elapsed_seconds": 30.335421374998987
+}

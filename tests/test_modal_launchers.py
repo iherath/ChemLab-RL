@@ -282,28 +282,60 @@ class ModalLauncherTests(unittest.TestCase):
         self.assertEqual(manifest['deadline_epoch'] - manifest['started_epoch'], 21600)
 
     def continuation_fixture(self):
+        import numpy as np
         source_hashes = {'scripts/collect_granular_demos.py': 'b' * 64}
         current = 'sha256:' + hashlib.sha256(json.dumps(source_hashes, sort_keys=True).encode()).hexdigest()
         parent_hashes = {'scripts/collect_granular_demos.py': 'a' * 64}
         parent_version = 'sha256:' + hashlib.sha256(json.dumps(parent_hashes, sort_keys=True).encode()).hexdigest()
-        parent_id = 'failed-position-guard'
         directory = self.path / 'docs/pilot/physics_validation'
         directory.mkdir(parents=True)
-        snapshot = directory / f'{parent_id}.final.npz'
-        snapshot.write_bytes(b'immutable saved simulator state fixture')
+        ancestor_id = 'older-diagnostic'
+        ancestor_snapshot = directory / f'{ancestor_id}.final.npz'
+        ctrl = np.zeros(14)
+        ctrl[6] = 255
+        arrays = dict(qpos=np.zeros(1459), qvel=np.zeros(1255), ctrl=ctrl)
+        np.savez(ancestor_snapshot, **arrays)
+        ancestor_result = directory / f'{ancestor_id}.remote.json'
+        ancestor_result.write_text(json.dumps(dict(run_id=ancestor_id, accepted=False, exit_code=1, timed_out=False)))
+        ancestor_sources = directory / f'{ancestor_id}.local-source-snapshot.json'
+        ancestor_sources.write_text(json.dumps(dict(run_id=ancestor_id, source_version=parent_version,
+                                                    source_files_sha256=parent_hashes, remote_source_verified=False)))
+        artifact = directory / 'physical-regrasp'
+        artifact.mkdir()
+        snapshot = artifact / 'final.npz'
+        np.savez(snapshot, **arrays)
+        outcome = artifact / 'outcome.json'
+        initial = dict(success=False, physical_valid=True, continuation_passed=True, failure='', grain_count=200,
+                       grain_radius_m=.0015, physics_checks=5000, max_grain_contact_penetration_m=.00002,
+                       conservation_error_g=0., spilled_g=0., source_g=4., tool_g=0., mass_g=0., inflight_g=0., total_mass_g=4.,
+                       physical_validation_scope='rigid_bodies_and_grains', powder_dynamics='physical_grains_v1',
+                       no_state_writes_after_restore=True, scope='Diagnostic suffix; not a from-reset rollout',
+                       source_snapshot_sha256=hashlib.sha256(ancestor_snapshot.read_bytes()).hexdigest(), source_snapshot_unchanged=True,
+                       powder_id=0, seed=None, target_g=.5,
+                       stages=[dict(stage='regrasped', source=[.02,.08,.85], left_tool=[.02,.08,.88], failure=None),
+                               dict(stage='lifted_regrasped_source', source=[.02,.08,.91], left_tool=[.02,.08,.94], failure=None)])
+        outcome.write_text(json.dumps(initial))
+        (artifact / 'fixture.mjb').write_bytes(b'native model fixture')
+        (artifact / 'physical_probe.py').write_text('# Physical actuator-only suffix fixture\n')
+        artifact_manifest = artifact / 'sha256_manifest.json'
+        artifact_manifest.write_text(json.dumps({name:hashlib.sha256((artifact/name).read_bytes()).hexdigest()
+                                                for name in ('final.npz','outcome.json','fixture.mjb','physical_probe.py')}))
+        parent_id = 'failed-position-guard'
         parent = dict(run_id=parent_id, accepted=False, exit_code=1, timed_out=False, dataset_written=False,
                       source_version=parent_version, source_files_sha256=parent_hashes,
                       outcome=dict(failure='loading depth miss: fixture', powder_id=0, seed=1001, target_g=.5, grain_count=200))
-        (directory / f'{parent_id}.remote.json').write_text(json.dumps(parent))
+        motivation = directory / f'{parent_id}.remote.json'
+        motivation.write_text(json.dumps(parent))
         script = self.path / 'scripts/collect_granular_demos.py'
         script.parent.mkdir()
         script.write_text('DEPTH_TOLERANCE_M = 0.00025\nLATERAL_TOLERANCE_M = 0.001\n')
         payload = dict(scope='saved_state_corrective_continuation', full_episode_accepted=False,
                        candidate_data_eligible=False, stage_physical_valid=True, correction_passed=True,
                        lift_passed=True, pour_passed=True, failure=None, grain_count=200,
-                       powder_id=0, seed=1001, target_g=.5, source_version=current,
-                       source_files_sha256=source_hashes, parent_run_id=parent_id,
-                       parent_source_version=parent_version, snapshot_sha256=hashlib.sha256(snapshot.read_bytes()).hexdigest(),
+                       no_state_writes_after_initialization=True, initialization_contact_model_override=None,
+                       powder_id=0, seed=None, target_g=.5, source_version=current,
+                       source_files_sha256=source_hashes,
+                       motivation=dict(run_id=parent_id,result_path=str(motivation.relative_to(self.path)),result_sha256=hashlib.sha256(motivation.read_bytes()).hexdigest()),
                        stage_summary=dict(physics_checks=5000, grain_radius_m=.0015,
                                           max_grain_contact_penetration_m=.0001, conservation_error_g=0.,
                                           spilled_g=0., transferred_g=.38, mass_g=.38, raw_net_mass_g=.379,
@@ -311,6 +343,13 @@ class ModalLauncherTests(unittest.TestCase):
                                           depth_tolerance_m=.00025, lateral_tolerance_m=.001,
                                           settled=True, finite_state=True, forbidden_contact_failure=False,
                                           rigid_contact_valid=True))
+        evidence = dict(checks=dict(source_held=True,tool_on_bench=True,finite_state=True,physics_valid=True,
+                                    right_tool_held=False,bench_support_gap_m=0.))
+        for name,file in dict(snapshot=snapshot,outcome=outcome,manifest=artifact_manifest,ancestor_snapshot=ancestor_snapshot,
+                              ancestor_result=ancestor_result,ancestor_source_manifest=ancestor_sources).items():
+            evidence[name+'_path']=str(file.relative_to(self.path))
+            evidence[name+'_sha256']=hashlib.sha256(file.read_bytes()).hexdigest()
+        payload['initial_state_provenance'] = evidence
         path = self.path / 'stage.json'
         path.write_text(json.dumps(payload))
         return path, payload, (current, source_hashes), snapshot
@@ -324,12 +363,17 @@ class ModalLauncherTests(unittest.TestCase):
         self.assertFalse(gate['candidate_data_eligible'])
         self.assertEqual(gate['accepted_demonstrations_from_gate'], 0)
         self.assertEqual(gate['stage_summary']['mass_g'], .38)  #Does not require the full .5g target.
+        self.assertIsNone(gate['initial_state_provenance']['initial_seed'])
+        self.assertFalse(gate['initial_state_provenance']['ancestor_remote_source_verified'])
+        self.assertEqual(gate['initial_state_provenance']['ancestor_run_id'], 'older-diagnostic')
+        self.assertEqual(gate['motivation']['run_id'], 'failed-position-guard')
 
     def test_candidate_rejects_incomplete_failed_or_mislabeled_continuation_before_cloud(self):
         path, payload, source, _ = self.continuation_fixture()
         changes = [('scope', 'full_reference'), ('correction_passed', False), ('lift_passed', False),
                    ('pour_passed', False), ('full_episode_accepted', True), ('candidate_data_eligible', True),
-                   ('stage_physical_valid', False), ('failure', 'contact failure'), ('grain_count', 400)]
+                   ('stage_physical_valid', False), ('failure', 'contact failure'), ('grain_count', 400),
+                   ('no_state_writes_after_initialization',False),('initialization_contact_model_override',{'pad_condim':4})]
         with patch.object(c, 'ROOT', self.path), patch.object(c, '_source_identity', return_value=source), \
                 patch.object(t, 'verify_workspace') as verify, patch.object(c, 'collect') as cloud:
             for key, value in changes:
@@ -370,6 +414,55 @@ class ModalLauncherTests(unittest.TestCase):
             snapshot.write_bytes(b'changed')
             with self.assertRaises(ValueError):
                 c.validate_stage_validation(path)
+
+    def test_initial_provenance_rejects_wrong_hold_support_or_invented_seed(self):
+        path, payload, source, _ = self.continuation_fixture()
+        checks = payload['initial_state_provenance']['checks']
+        with patch.object(c, 'ROOT', self.path), patch.object(c, '_source_identity', return_value=source):
+            for key,value in [('source_held',False),('tool_on_bench',False),('physics_valid',False),
+                              ('right_tool_held',True),('bench_support_gap_m',.002)]:
+                with self.subTest(key=key):
+                    changed = {**payload,'initial_state_provenance':{**payload['initial_state_provenance'],'checks':{**checks,key:value}}}
+                    path.write_text(json.dumps(changed))
+                    with self.assertRaises(ValueError): c.validate_stage_validation(path)
+            path.write_text(json.dumps({**payload,'seed':1001}))
+            with self.assertRaises(ValueError): c.validate_stage_validation(path)
+
+    def test_initial_provenance_rejects_repo_escape_and_bad_motivation_identity(self):
+        path, payload, source, _ = self.continuation_fixture()
+        with tempfile.TemporaryDirectory() as external, patch.object(c, 'ROOT', self.path), \
+                patch.object(c, '_source_identity', return_value=source):
+            file = Path(external) / 'outside.json'
+            file.write_text('{}')
+            changed = {**payload,'initial_state_provenance':{**payload['initial_state_provenance'],
+                       'outcome_path':str(file),'outcome_sha256':hashlib.sha256(file.read_bytes()).hexdigest()}}
+            path.write_text(json.dumps(changed))
+            with self.assertRaises(ValueError): c.validate_stage_validation(path)
+            path.write_text(json.dumps({**payload,'motivation':{**payload['motivation'],'run_id':'wrong-parent'}}))
+            with self.assertRaises(ValueError): c.validate_stage_validation(path)
+
+    def test_initial_provenance_rejects_nonfinite_state_even_with_consistent_file_hashes(self):
+        import numpy as np
+        path, payload, source, snapshot = self.continuation_fixture()
+        with np.load(snapshot) as values: arrays = {key:values[key].copy() for key in values.files}
+        arrays['qvel'][5] = np.nan
+        np.savez(snapshot, **arrays)
+        evidence = payload['initial_state_provenance']
+        evidence['snapshot_sha256'] = hashlib.sha256(snapshot.read_bytes()).hexdigest()
+        manifest_path = self.path / evidence['manifest_path']
+        inventory = json.loads(manifest_path.read_text())
+        inventory['final.npz'] = evidence['snapshot_sha256']
+        manifest_path.write_text(json.dumps(inventory))
+        evidence['manifest_sha256'] = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+        path.write_text(json.dumps(payload))
+        with patch.object(c, 'ROOT', self.path), patch.object(c, '_source_identity', return_value=source):
+            with self.assertRaises(ValueError): c.validate_stage_validation(path)
+
+    def test_initial_provenance_rejects_native_physics_changes_from_recorded_ancestor(self):
+        _, payload, _, _ = self.continuation_fixture()
+        payload['source_files_sha256']['chemlab_rl/granular_env.py'] = 'c' * 64
+        with patch.object(c, 'ROOT', self.path):
+            with self.assertRaises(ValueError): c._validate_initial_state_provenance(payload)
 
     def test_candidate_submits_all_30_from_reset_with_no_reference_or_stage_reuse(self):
         gate = dict(kind='saved_state_corrective_continuation', source_version='sha256:new', full_episode_accepted=False)

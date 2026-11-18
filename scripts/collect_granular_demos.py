@@ -20,7 +20,7 @@ from chemlab_rl.scrape_env import ACTION_SEMANTICS, SCHEMA_VERSION
 from scripts.collect_scrape_v2 import (RecorderBridge, EpisodeFinished, _make_demo,
                                      _approach_strict, write_episode)
 
-EXPERT_CONTROLLER = "guarded_complete_batch_v1"
+EXPERT_CONTROLLER = "guarded_complete_batch_v3_centered_pad_patch"
 MIN_LOADING_HEIGHT_M = 0.006
 MAX_LOADING_HEIGHT_M = 0.016
 DEPTH_TOLERANCE_M = 0.00025

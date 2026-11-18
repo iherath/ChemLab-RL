@@ -1,0 +1,12 @@
+# Native vial training: match the validated Modal image's critical packages.
+# Use Python 3.12. Do not combine with the toy-policy requirements.txt (NumPy 1).
+-r requirements-vla.txt
+numpy>=2,<2.3
+mujoco==3.16.0
+gymnasium==1.4.0
+trimesh==5.1.1
+imageio[ffmpeg]>=2.34
+pillow
+coacd>=1.0.14
+pytest>=8
+modal==1.6.4

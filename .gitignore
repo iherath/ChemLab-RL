@@ -5,6 +5,7 @@ __pycache__/
 *.docx
 .DS_Store
 .venv/
+.venv-vial/
 chem_rl_sim/
 data/**
 !data/teleop/
@@ -12,4 +13,6 @@ data/**
 !data/teleop/scrape_vial_bc.json
 !data/teleop/scrape_vial/
 !data/teleop/scrape_vial/**
+!data/teleop/vial_placement_v1/
+!data/teleop/vial_placement_v1/**
 paper_ogpo/.env.sh

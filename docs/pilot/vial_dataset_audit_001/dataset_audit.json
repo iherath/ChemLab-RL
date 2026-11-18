@@ -1,0 +1,125 @@
+{
+  "task_id": "vial_placement_native_v1",
+  "env_args": {
+    "env_name": "ChemVialWeighing-v0",
+    "type": "chem_rl_sim",
+    "env_kwargs": {
+      "image_size": 64,
+      "control_hz": 20.0,
+      "hand": "robotiq",
+      "layout": "weigh",
+      "clutter": false,
+      "max_episode_steps": 1000000000,
+      "randomize": true,
+      "normalized_actions": true
+    },
+    "collector": "grok_session_v2"
+  },
+  "episodes": [
+    {
+      "name": "demo_0",
+      "original_samples": 1175,
+      "retained_samples": 1002,
+      "first_terminal": 1001,
+      "success_frames": 174,
+      "peak_scale_reading_g": 20.0,
+      "action_state_sha256": "1e28a85800101e025decf5c50006f508280b45fea9e4236f662d6be71bbd6152",
+      "split": "train",
+      "exclusion_reason": null
+    },
+    {
+      "name": "demo_1",
+      "original_samples": 1174,
+      "retained_samples": 1001,
+      "first_terminal": 1000,
+      "success_frames": 174,
+      "peak_scale_reading_g": 20.0,
+      "action_state_sha256": "e035ab4a795d5454c10c60b0b213050f4a6134af0a812fe3daf8b1625c46fcdc",
+      "split": "train",
+      "exclusion_reason": null
+    },
+    {
+      "name": "demo_2",
+      "original_samples": 1181,
+      "retained_samples": 1008,
+      "first_terminal": 1007,
+      "success_frames": 174,
+      "peak_scale_reading_g": 20.0,
+      "action_state_sha256": "9b4dcb93d6a1c994524773850a7f649308203118f53d798018f852f220466e96",
+      "split": "train",
+      "exclusion_reason": null
+    },
+    {
+      "name": "demo_3",
+      "original_samples": 1192,
+      "retained_samples": 1019,
+      "first_terminal": 1018,
+      "success_frames": 174,
+      "peak_scale_reading_g": 20.0,
+      "action_state_sha256": "9e1307655085f6022b94a4d16ce9afbe3b66daab12ccf0c2d8aa1debfdc17117",
+      "split": "train",
+      "exclusion_reason": null
+    },
+    {
+      "name": "demo_4",
+      "original_samples": 1470,
+      "retained_samples": 1297,
+      "first_terminal": 1296,
+      "success_frames": 174,
+      "peak_scale_reading_g": 20.0,
+      "action_state_sha256": "5ff07f64485169a1acff73791287e670c9fbc8cce8e7e9a2bda284fb0a26537a",
+      "split": "train",
+      "exclusion_reason": null
+    },
+    {
+      "name": "demo_5",
+      "original_samples": 1265,
+      "retained_samples": 1092,
+      "first_terminal": 1091,
+      "success_frames": 174,
+      "peak_scale_reading_g": 20.0,
+      "action_state_sha256": "989a005af18fa685f9952fc090edd37f7fa0d28d5fa0431e72837a70ddfaecef",
+      "split": "train",
+      "exclusion_reason": null
+    },
+    {
+      "name": "demo_6",
+      "original_samples": 1182,
+      "retained_samples": 1009,
+      "first_terminal": 1008,
+      "success_frames": 174,
+      "peak_scale_reading_g": 20.0,
+      "action_state_sha256": "484df6a332568470caee061bcb05f3fd29bb49717086fe1fd15ad6fdaf2d5e4c",
+      "split": "train",
+      "exclusion_reason": null
+    },
+    {
+      "name": "demo_7",
+      "original_samples": 1184,
+      "retained_samples": 1011,
+      "first_terminal": 1010,
+      "success_frames": 174,
+      "peak_scale_reading_g": 20.0,
+      "action_state_sha256": "522b097739c2772fe976e7d66642464943a216c39f421697b2d790a90229de13",
+      "split": "heldout",
+      "exclusion_reason": null
+    },
+    {
+      "name": "demo_8",
+      "original_samples": 1179,
+      "retained_samples": 0,
+      "first_terminal": 1005,
+      "success_frames": 174,
+      "peak_scale_reading_g": 3603.8369140625,
+      "action_state_sha256": "770c50cdadee204a92a046f458ca9791e23fdac162e54bbe7ffaac3368b909c0",
+      "split": "excluded",
+      "exclusion_reason": "excessive instrument force during placement"
+    }
+  ],
+  "dataset_sha256": "1d2fc0e3a809b1bb00ceb12b4fa99bc8d7c39175e9e39b5a1592d20d7c942950",
+  "all_initial_states_identical": true,
+  "image_continuity_checked": true,
+  "observation_alignment": "obs[t] -> actions[t] -> next_obs[t]",
+  "historical_contact_audit_available": false,
+  "generalization_scope": "fixed scene; held-out trajectory only"
+}

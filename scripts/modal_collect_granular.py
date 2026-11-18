@@ -244,6 +244,119 @@ def validate_reference_result(path, source_path=None):
             "source_files_sha256": hashes, "external_source_evidence": evidence}
 
 
+def _checked_repo_file(value, digest, label):
+    """Read immutable evidence inside this checkout, rejecting escaping links."""
+    if not isinstance(value, str) or not value or not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
+        raise ValueError(f"Missing declared path/SHA for {label}")
+    path = Path(value)
+    path = (path if path.is_absolute() else ROOT / path).resolve(strict=True)
+    if not path.is_relative_to(ROOT.resolve()) or not path.is_file():
+        raise ValueError(f"{label} must be a file inside the repository")
+    raw = path.read_bytes()
+    if hashlib.sha256(raw).hexdigest() != digest:
+        raise ValueError(f"{label} SHA does not match its immutable file")
+    return path, raw
+
+
+def _validate_initial_state_provenance(payload):
+    """Verify the actual regrasp suffix state separately from failure motivation."""
+    import numpy as np
+    evidence = payload.get("initial_state_provenance")
+    if not isinstance(evidence, dict):
+        raise ValueError("Continuation must declare its actual initial-state provenance")
+    files = {}
+    for key in ("snapshot", "outcome", "manifest", "ancestor_snapshot", "ancestor_result", "ancestor_source_manifest"):
+        files[key] = _checked_repo_file(evidence.get(f"{key}_path"), evidence.get(f"{key}_sha256"), key)
+    snapshot, _ = files["snapshot"]
+    initial = json.loads(files["outcome"][1])
+    manifest_path, manifest_raw = files["manifest"]
+    inventory = json.loads(manifest_raw)
+    if not isinstance(inventory, dict):
+        raise ValueError("Invalid initial-artifact manifest")
+    for key in ("snapshot", "outcome"):
+        relative = str(files[key][0].relative_to(manifest_path.parent))
+        if inventory.get(relative) != evidence[f"{key}_sha256"]:
+            raise ValueError("Initial snapshot/outcome differs from its recorded artifact manifest")
+    for name in ("fixture.mjb", "physical_probe.py"):
+        _checked_repo_file(str(manifest_path.parent / name), inventory.get(name), f"initial artifact {name}")
+    ancestor = json.loads(files["ancestor_result"][1])
+    ancestor_sources = json.loads(files["ancestor_source_manifest"][1])
+    ancestor_hashes = ancestor_sources.get("source_files_sha256")
+    if (not isinstance(ancestor_hashes, dict) or not ancestor_hashes
+            or ancestor_sources.get("source_version") != "sha256:" + hashlib.sha256(json.dumps(ancestor_hashes, sort_keys=True).encode()).hexdigest()
+            or not ancestor.get("run_id") or ancestor_sources.get("run_id") != ancestor["run_id"]
+            or ancestor.get("accepted") is not False or ancestor.get("timed_out") is not False
+            or ancestor.get("exit_code") != 1
+            or initial.get("source_snapshot_sha256") != evidence["ancestor_snapshot_sha256"]
+            or initial.get("source_snapshot_unchanged") is not True):
+        raise ValueError("Initial-state ancestor chain is inconsistent")
+    ancestor_snapshot = files["ancestor_snapshot"][0]
+    if ancestor_snapshot.name != ancestor["run_id"] + ".final.npz":
+        raise ValueError("Ancestor snapshot does not identify its declared failed run")
+    current_hashes = payload["source_files_sha256"]
+    allowed_controller_changes = {"scripts/collect_granular_demos.py", "scripts/collect_scrape_v2.py"}
+    changed_files = {name for name in ancestor_hashes if ancestor_hashes[name] != current_hashes.get(name)}
+    if set(ancestor_hashes) != set(current_hashes) or not changed_files <= allowed_controller_changes:
+        raise ValueError("Initial-state continuation must preserve native physics/assets and change only the declared controllers")
+    checks = evidence.get("checks", {})
+    if (not isinstance(checks, dict)
+            or any(checks.get(key) is not True for key in ("source_held", "tool_on_bench", "finite_state", "physics_valid"))
+            or checks.get("right_tool_held") is not False
+            or type(checks.get("bench_support_gap_m")) not in (int, float)
+            or not math.isfinite(checks["bench_support_gap_m"]) or abs(checks["bench_support_gap_m"]) > .001):
+        raise ValueError("Initial state must have a physically held source and supported ungrasped tool")
+    with np.load(snapshot, allow_pickle=False) as state, np.load(ancestor_snapshot, allow_pickle=False) as ancestor_state:
+        for key in ("qpos", "qvel", "ctrl"):
+            if (key not in state or key not in ancestor_state or state[key].ndim != 1 or not state[key].size
+                    or state[key].shape != ancestor_state[key].shape
+                    or not np.isfinite(state[key]).all() or not np.isfinite(ancestor_state[key]).all()):
+                raise ValueError("Initial simulator snapshot must contain finite complete state arrays")
+        if state["ctrl"].shape != (14,) or state["ctrl"][6] < 200 or state["ctrl"][13] > 50:
+            raise ValueError("Initial snapshot must retain the left grasp and keep the right gripper open")
+    numeric = ("grain_count", "grain_radius_m", "physics_checks", "max_grain_contact_penetration_m",
+               "conservation_error_g", "spilled_g", "source_g", "tool_g", "mass_g", "inflight_g", "total_mass_g")
+    if any(type(initial.get(key)) not in (int, float) or not math.isfinite(initial[key]) for key in numeric):
+        raise ValueError("Initial-state outcome lacks finite physical inventory/contact evidence")
+    if (initial.get("continuation_passed") is not True or initial.get("physical_valid") is not True
+            or initial.get("success") is not False or initial.get("failure")
+            or initial.get("physical_validation_scope") != "rigid_bodies_and_grains"
+            or initial.get("powder_dynamics") != "physical_grains_v1"
+            or initial.get("no_state_writes_after_restore") is not True
+            or not isinstance(initial.get("scope"), str) or "not a from-reset" not in initial["scope"]
+            or initial["grain_count"] != 200 or initial["physics_checks"] <= 0
+            or initial["grain_radius_m"] <= 0
+            or not 0 <= initial["max_grain_contact_penetration_m"] <= .2 * initial["grain_radius_m"] + 1e-12
+            or abs(initial["conservation_error_g"]) > 1e-8
+            or any(abs(initial[key]) > 1e-12 for key in ("spilled_g", "tool_g", "mass_g", "inflight_g"))
+            or initial["source_g"] <= 0 or abs(initial["source_g"] - initial["total_mass_g"]) > 1e-8
+            or any(payload.get(key) != initial.get(key) for key in ("powder_id", "seed", "target_g", "grain_count"))):
+        raise ValueError("Declared initial state is not the physically valid source-held diagnostic suffix")
+    stages = {row.get("stage"): row for row in initial.get("stages", []) if isinstance(row, dict)}
+    try:
+        held, lifted = stages["regrasped"], stages["lifted_regrasped_source"]
+        source_delta = np.asarray(lifted["source"], float) - np.asarray(held["source"], float)
+        tool_delta = np.asarray(lifted["left_tool"], float) - np.asarray(held["left_tool"], float)
+    except (KeyError, TypeError, ValueError) as error:
+        raise ValueError("Initial source hold lacks the recorded physical lift evidence") from error
+    if (source_delta.shape != (3,) or tool_delta.shape != (3,) or not np.isfinite(source_delta).all()
+            or not np.isfinite(tool_delta).all() or source_delta[2] < .05
+            or np.linalg.norm(source_delta - tool_delta) > .005 or held.get("failure") or lifted.get("failure")):
+        raise ValueError("Recorded source did not follow the physical left-gripper lift")
+    motivation = payload.get("motivation", {})
+    motivation_path, motivation_raw = _checked_repo_file(motivation.get("result_path"), motivation.get("result_sha256"), "motivation")
+    failed = json.loads(motivation_raw)
+    if (failed.get("run_id") != motivation.get("run_id") or failed.get("accepted") is not False
+            or failed.get("exit_code") != 1 or failed.get("timed_out") is not False
+            or not str(failed.get("outcome", {}).get("failure", "")).startswith("loading depth miss:")):
+        raise ValueError("Motivating failed scoop run must remain separate and accurately identified")
+    return {**evidence, "initial_scope": initial["scope"], "initial_seed": initial.get("seed"),
+            "ancestor_run_id": ancestor["run_id"], "ancestor_source_version": ancestor_sources["source_version"],
+            "ancestor_remote_source_verified": ancestor_sources.get("remote_source_verified", False),
+            "controller_files_changed_from_ancestor": sorted(changed_files),
+            "ancestor_source_capture_note": ancestor_sources.get("capture_note"),
+            "motivation": {**motivation, "result_path": str(motivation_path), "source_version": failed.get("source_version")}}
+
+
 def validate_stage_validation(path):
     """Validate a corrective suffix as a launch gate, never as accepted data.
 
@@ -258,6 +371,8 @@ def validate_stage_validation(path):
             or payload.get("full_episode_accepted") is not False
             or payload.get("candidate_data_eligible") is not False
             or payload.get("stage_physical_valid") is not True
+            or payload.get("no_state_writes_after_initialization") is not True
+            or payload.get("initialization_contact_model_override") is not None
             or any(payload.get(key) is not True for key in ("correction_passed", "lift_passed", "pour_passed"))
             or payload.get("failure") or payload.get("grain_count") != 200):
         raise ValueError("Candidate launch requires a complete valid corrective continuation, explicitly ineligible as episode data")
@@ -294,31 +409,11 @@ def validate_stage_validation(path):
             or version != "sha256:" + hashlib.sha256(json.dumps(hashes, sort_keys=True).encode()).hexdigest()
             or version != current_version or hashes != current_hashes):
         raise ValueError("Continuation source manifest is incomplete, inconsistent or differs from current production source")
-    parent_id = payload.get("parent_run_id", "")
-    if not isinstance(parent_id, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,99}", parent_id):
-        raise ValueError("Continuation must identify its failed parent run")
-    parent_path = ROOT / "docs/pilot/physics_validation" / f"{parent_id}.remote.json"
-    snapshot = parent_path.with_name(f"{parent_id}.final.npz")
-    parent_raw = parent_path.read_bytes()
-    parent = json.loads(parent_raw)
-    parent_outcome = parent.get("outcome", {})
-    parent_hashes = parent.get("source_files_sha256")
-    if (parent.get("run_id") != parent_id or parent.get("accepted") is not False
-            or parent.get("exit_code") != 1 or parent.get("timed_out") is not False
-            or parent.get("dataset_written") is not False
-            or not str(parent_outcome.get("failure", "")).startswith("loading depth miss:")
-            or not isinstance(parent_hashes, dict) or not parent_hashes
-            or parent.get("source_version") != "sha256:" + hashlib.sha256(json.dumps(parent_hashes, sort_keys=True).encode()).hexdigest()
-            or payload.get("parent_source_version") != parent.get("source_version")
-            or version == parent.get("source_version")
-            or payload.get("snapshot_sha256") != hashlib.sha256(snapshot.read_bytes()).hexdigest()
-            or any(payload.get(key) != parent_outcome.get(key) for key in ("powder_id", "seed", "target_g", "grain_count"))):
-        raise ValueError("Continuation does not match the failed position-guard parent and original saved state")
+    initial = _validate_initial_state_provenance(payload)
     return {"kind": "saved_state_corrective_continuation", "scope": payload["scope"],
             "path": str(path.resolve()), "sha256": hashlib.sha256(raw).hexdigest(),
             "source_version": version, "source_files_sha256": hashes,
-            "parent_run_id": parent_id, "parent_result_sha256": hashlib.sha256(parent_raw).hexdigest(),
-            "parent_source_version": payload["parent_source_version"], "snapshot_sha256": payload["snapshot_sha256"],
+            "initial_state_provenance": initial, "motivation": initial["motivation"],
             "stage_summary": summary, "full_episode_accepted": False, "candidate_data_eligible": False,
             "accepted_demonstrations_from_gate": 0}
 

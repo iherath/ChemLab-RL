@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 
 from scripts import collect_granular_demos as expert
+from scripts.collect_scrape_v2 import _pick_tool
 from chemlab_rl.granular_geometry import SCOOP_FRAME
 
 
@@ -88,6 +89,64 @@ def test_cup_servo_stops_before_next_ik_when_physical_grasp_is_absent(lost_befor
     assert len(controls) == len(used) == (0 if lost_before_first_tick else 1)
     assert env.scene.bad == 'right lost contact-supported spatula grasp'
     np.testing.assert_array_equal(env.data.qpos, np.zeros(10))
+
+
+def tool_pick_fixture(*, pregrasp_offset=None, closing_offset=None):
+    env = fake_env()
+    frame = rotation_y(.05)
+    body = env.data.body('spatula')
+    body.xpos = np.array([.28,.12,.795])
+    body.xmat = frame.ravel()
+    pregrasp_offset = np.array([0.,0.,.0085]) if pregrasp_offset is None else np.asarray(pregrasp_offset)
+    commands, ik_rotations = [], []
+    session = SimpleNamespace(q_cmd={'right':np.zeros(6)},grip_cmd={'right':0.},
+                              _scratch=SimpleNamespace(qpos=np.zeros_like(env.data.qpos)))
+    def pose():
+        offset = closing_offset if closing_offset is not None and session.grip_cmd['right'] >= 255 else pregrasp_offset
+        return body.xpos+frame@offset, frame@np.diag([-1.,1.,-1.])
+    def ik(scratch, position, rotation, joints, **kwargs):
+        ik_rotations.append(rotation.copy())
+        return joints.copy(),0.,0.
+    session.arms={'right':SimpleNamespace(tool_pose=pose,ik=ik)}
+    env.legacy.top_down=lambda yaw:np.diag([-1.,1.,-1.])
+    env.legacy.rot_angle=lambda a,b:float(np.arccos(np.clip((np.trace(a.T@b)-1)/2,-1,1)))
+    demo=SimpleNamespace(session=session,go=lambda *a,**k:True,
+                         scene=SimpleNamespace(step=lambda _:commands.append(session.grip_cmd['right'])),
+                         idle=lambda _:True,latch=lambda *a:object())
+    return env,demo,commands,ik_rotations
+
+
+def test_tool_pick_does_not_close_on_a_misaligned_handle():
+    env,demo,commands,_=tool_pick_fixture(pregrasp_offset=[.003,0.,0.])
+    assert _pick_tool(demo,env) is None
+    assert commands and all(value==0. for value in commands)
+    assert 'pregrasp not centered' in env.scene.bad
+    np.testing.assert_array_equal(env.data.qpos,np.zeros(10))
+
+
+def test_tool_pick_aligns_to_measured_resting_handle_tilt_before_closing():
+    env,demo,commands,rotations=tool_pick_fixture()
+    assert _pick_tool(demo,env) is not None
+    desired=env.data.body('spatula').xmat.reshape(3,3)@np.diag([-1.,1.,-1.])
+    for rotation in rotations:
+        np.testing.assert_allclose(rotation,desired,atol=1e-14)
+    assert commands[:3]==[0.,0.,0.]
+    assert commands[-1]==255. and all(a<=b for a,b in zip(commands,commands[1:]))
+    np.testing.assert_array_equal(env.data.qpos,np.zeros(10))
+
+
+def test_tool_pick_requires_pad_center_offset_not_just_pinch_marker_alignment():
+    env,demo,commands,_=tool_pick_fixture(pregrasp_offset=np.zeros(3))
+    assert _pick_tool(demo,env) is None
+    assert commands and all(value==0. for value in commands)
+    assert 'pregrasp not centered' in env.scene.bad
+
+
+def test_tool_pick_rejects_handle_drift_during_closure():
+    env,demo,commands,_=tool_pick_fixture(closing_offset=np.array([.003,0.,0.]))
+    assert _pick_tool(demo,env) is None
+    assert commands[-1]==255.
+    assert 'handle grasp off-center' in env.scene.bad
 
 
 def test_batch_guard_counts_airborne_grains_and_rejects_invalid_measurements():
