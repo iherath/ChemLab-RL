@@ -33,6 +33,9 @@ def validate_request(request):
         if set(split) != {"train_episodes", "heldout_episodes", "excluded_episodes"}:
             raise ValueError("Explicit split requires train/heldout/excluded episode lists")
         validate_split(split["train_episodes"], split["heldout_episodes"], split["excluded_episodes"])
+    if request.get("resume") and not re.fullmatch(
+            r"[A-Za-z0-9][A-Za-z0-9_.-]{0,99}/checkpoint_[0-9]{6}", request["resume"]):
+        raise ValueError("Resume must identify a saved run/checkpoint")
 
 
 def build_command(request):
@@ -44,6 +47,8 @@ def build_command(request):
             "--chunk-size", "50", "--n-action-steps", "2", "--heldout-samples", "128", "--bf16"]
     if request.get("split") is not None:
         command += ["--split-json", "/runs/" + request["run_id"] + "/split.json"]
+    if request.get("resume"):
+        command += ["--resume", "/runs/" + request["resume"]]
     return command
 
 
@@ -66,6 +71,15 @@ def execute(request: dict, deadline: float) -> dict:
     dataset = Path("/datasets") / request["dataset"]
     if not dataset.is_file() or file_sha256(dataset) != request["dataset_sha256"]:
         raise ValueError("Remote vial dataset does not match verified local bytes")
+    if request.get("resume"):
+        resume = Path('/runs') / request['resume']
+        saved = json.loads((resume / 'data_manifest.json').read_text())
+        if saved['dataset_sha256'] != request['dataset_sha256']:
+            raise ValueError('Resume checkpoint dataset differs')
+        if not (resume / 'training_state.pt').is_file():
+            raise ValueError('Resume checkpoint lacks optimizer/RNG state')
+        if any(saved[key] != request['split'][key] for key in ('train_episodes','heldout_episodes','excluded_episodes')):
+            raise ValueError('Resume split differs')
     out = Path("/runs") / request["run_id"]
     out.mkdir(parents=True, exist_ok=False)
     if request.get("split") is not None:
@@ -120,6 +134,32 @@ def execute(request: dict, deadline: float) -> dict:
     if code:
         raise RuntimeError(f"Vial BC exited{code}; evidence at{RUN_VOLUME}/{request['run_id']}")
     return result
+
+
+@app.local_entrypoint()
+def continue_bc(run_id: str = 'smolvla-vial98-a100-bc10000-001',
+                source_run: str = 'smolvla-vial98-a100-bc5000-001',
+                checkpoint_step: int = 5000, steps: int = 10000,
+                max_minutes: int = 40):
+    """Continue a verified cloud checkpoint without redownloading its dataset."""
+    verify_workspace()
+    if steps <= checkpoint_step:
+        raise ValueError('Target step must exceed the starting step')
+    manifest = json.loads((ROOT / 'docs/pilot' / source_run / 'data_manifest.json').read_text())
+    original = json.loads((ROOT / 'docs/pilot' / source_run / 'wrapper_result.json').read_text())
+    request = dict(dataset=original['dataset'],
+                   dataset_sha256=manifest['dataset_sha256'], run_id=run_id, steps=steps,
+                   batch_size=8, max_minutes=max_minutes, save_every=500, seed=0,
+                   resume=f'{source_run}/checkpoint_{checkpoint_step:06d}',
+                   split={key:manifest[key] for key in ('train_episodes','heldout_episodes','excluded_episodes')})
+    validate_request(request)
+    out = ROOT / 'docs/pilot' / run_id
+    out.mkdir(exist_ok=False)
+    deadline = time.time() + max_minutes * 60
+    (out / 'wrapper_launch.json').write_text(json.dumps(request, indent=2))
+    result = execute.remote(request, deadline)
+    (out / 'wrapper_result.json').write_text(json.dumps(result, indent=2))
+    print(json.dumps(result), flush=True)
 
 
 @app.local_entrypoint()

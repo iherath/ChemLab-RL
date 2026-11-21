@@ -2,6 +2,7 @@
 import tempfile
 from pathlib import Path
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import numpy as np
@@ -34,7 +35,7 @@ class FakeEnv:
 
 class FakePolicy:
     def __init__(self, *args, **kwargs):
-        pass
+        self.policy = SimpleNamespace(config=SimpleNamespace(chunk_size=50, n_action_steps=2))
 
     def reset(self):
         pass

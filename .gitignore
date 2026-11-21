@@ -5,6 +5,11 @@ __pycache__/
 *.docx
 .DS_Store
 .venv/
+.venv-*/
+/runs/
+/demos/
+/MUJOCO_LOG.TXT
+*.partial
 .venv-vial/
 chem_rl_sim/
 data/**

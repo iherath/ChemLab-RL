@@ -1,4 +1,6 @@
-"""Upload one file to ish70 with bounded IPv4 transfers and visible progress.
+"""Upload one file to the expected workspace with bounded IPv4 transfers and visible progress.
+
+Set CHEMLAB_MODAL_WORKSPACE to use your own workspace (default: ish70).
 
 No Modal App or GPU is created. This is pinned to Modal 1.6.4 because its public
 batch_upload API does not expose connection limits, request timeouts, or progress.
@@ -43,8 +45,9 @@ def verify_workspace() -> None:
     profiles = json.loads(result.stdout)
     selected = os.environ.get("MODAL_PROFILE")
     active = [p for p in profiles if p["name"] == selected] if selected else [p for p in profiles if p["active"]]
-    if len(active) != 1 or active[0]["workspace"] != "ish70":
-        raise ValueError("Refusing upload outside the authenticated ish70 workspace")
+    expected = os.environ.get("CHEMLAB_MODAL_WORKSPACE", "ish70")
+    if not expected or len(active) != 1 or active[0]["workspace"] != expected:
+        raise ValueError(f"Refusing upload outside the authenticated {expected!r} workspace")
 
 
 def file_digest(path: Path) -> str:
@@ -172,7 +175,7 @@ def main(argv=None) -> int:
         if importlib.metadata.version("modal") != SDK_VERSION:
             raise ValueError("This private API adapter requires modal==1.6.4")
         verify_workspace()
-        emit("starting", workspace="ish70", volume=args.volume, remote_path=args.remote_path,
+        emit("starting", workspace=os.environ.get("CHEMLAB_MODAL_WORKSPACE", "ish70"), volume=args.volume, remote_path=args.remote_path,
              size_bytes=args.file.stat().st_size, ipv4=True, concurrency=args.concurrency,
              request_seconds=args.request_seconds, max_seconds=args.max_seconds)
         # Do not surface SDK server warnings, signed URLs, or credential identifiers.

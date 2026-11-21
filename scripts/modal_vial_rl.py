@@ -45,8 +45,9 @@ def validate_request(request):
     _identifier(request["run_id"])
     _identifier(request["checkpoint_run"])
     _dataset_basename(request["dataset"])
-    if type(request["checkpoint_step"]) is not int or not 1 <= request["checkpoint_step"] <= 10000:
-        raise ValueError("Choose a saved trained BC checkpoint step1..10000")
+    checkpoint_limit = 500000 if request["mode"] == "baseline_ode" else 10000
+    if type(request["checkpoint_step"]) is not int or not 1 <= request["checkpoint_step"] <= checkpoint_limit:
+        raise ValueError(f"Choose a saved trained BC checkpoint step1..{checkpoint_limit}")
     if request["mode"] not in LIMITS or request["method"] not in {"bon", "ogpo", "vadar"}:
         raise ValueError("Unknown bounded vial mode/method")
     if request["mode"].startswith("baseline_") and request["method"] != "ogpo":

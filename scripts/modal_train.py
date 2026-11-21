@@ -2,7 +2,8 @@
 
 Authentication is supplied by the CLI, never bundled with source. Dataset and
 checkpoint volumes are separate from the model download cache. The local
-entrypoint refuses a workspace other than ish70 before uploading or computing.
+entrypoint verifies the expected workspace before uploading or computing.
+Set CHEMLAB_MODAL_WORKSPACE to use your own workspace (default: ish70).
 """
 
 from __future__ import annotations
@@ -287,10 +288,11 @@ def verify_workspace() -> None:
     profiles = json.loads(result.stdout)
     selected = os.environ.get("MODAL_PROFILE")
     active = [p for p in profiles if p["name"] == selected] if selected else [p for p in profiles if p["active"]]
-    if len(active) != 1 or active[0]["workspace"] != "ish70":
-        raise RuntimeError("Refusing compute/upload: select the authenticated ish70 Modal profile")
+    expected = os.environ.get("CHEMLAB_MODAL_WORKSPACE", "ish70")
+    if not expected or len(active) != 1 or active[0]["workspace"] != expected:
+        raise RuntimeError(f"Refusing compute/upload: select the authenticated {expected!r} Modal workspace")
     if os.environ.get("MODAL_TOKEN_ID") or os.environ.get("MODAL_TOKEN_SECRET"):
-        raise RuntimeError("Use the verified ish70 config profile, without token environment overrides")
+        raise RuntimeError("Use the verified config profile, without token environment overrides")
 
 
 def _dataset_basename(value: str) -> str:

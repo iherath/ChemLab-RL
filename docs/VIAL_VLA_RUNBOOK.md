@@ -1,5 +1,9 @@
 # Vial placement: colleague training handoff
 
+**Current checkpoint:** see [BC400k download and continuation](VIAL_BC400K_HANDOFF.md).
+Use **25 actions before replanning** for this trained checkpoint. The commands
+and two-action setting below document the earlier pilot setup.
+
 This experiment moves a rigid 20 g vial onto the balance and closes the draft shield. It is separate from the contact-driven powder-transfer task. The policy receives three 64×64 RGB cameras, 14 measured joints including gripper-driver angles, the measured scale reading, and a language instruction. Actions are 14 normalized absolute actuator targets at 20 Hz. SmolVLA predicts 50 controls and executes 2 before replanning.
 
 The complete release contains **98 episodes: 97 training and 1 held out**. All 90 additional demonstrations have been collected and accepted. There were 9 historical recordings; original `demo_8` is excluded for 22 instrument readings above 100 g, peaking at 3603.84 g during placement. The package retains historical `demo_0` through `demo_7` and adds the 90 new recordings. Original `demo_7` remains held out. Expanded-data training has not been started. Collection evidence and the different audit coverage of historical and new episodes are documented in [VIAL_DATASET.md](VIAL_DATASET.md).

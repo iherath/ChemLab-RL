@@ -48,26 +48,27 @@ class VialTransition:
 class VialReplay(PersistentReplay):
     """Reuse the tested SQLite transport with a vial-specific payload contract."""
 
-    def __init__(self, path, *, provenance, capacity=30_000, seed=0):
-        super().__init__(path, capacity=capacity, action_steps=2, action_dim=14,
+    def __init__(self, path, *, provenance, capacity=30_000, seed=0, action_steps=2):
+        super().__init__(path, capacity=capacity, action_steps=action_steps, action_dim=14,
                          state_dim=15, subgoals=4, heldout_ids=(),
                          provenance=TASK_ID + ":" + provenance, seed=seed)
 
     def _encode_transition(self, t):
         h = t.executed_steps
-        if (isinstance(h, bool) or not isinstance(h, (int, np.integer)) or not 1 <= h <= 2
+        horizon = self.contract['action_steps']
+        if (isinstance(h, bool) or not isinstance(h, (int, np.integer)) or not 1 <= h <= horizon
                 or not isinstance(t.terminated, (bool, np.bool_))
                 or not isinstance(t.truncated, (bool, np.bool_))
-                or (h < 2 and not (t.terminated or t.truncated))):
+                or (h < horizon and not (t.terminated or t.truncated))):
             raise ValueError("Invalid vial terminal flags or executed horizon")
         arrays = {}
         for label, obs in (("obs", t.observation), ("next", t.next_observation)):
             clean = actor_observation(obs, obs["task"], 15)
             arrays.update({f"{label}/{key}": value for key, value in clean.items()})
         a, r = np.asarray(t.actions, np.float32), np.asarray(t.rewards, np.float32)
-        if a.shape != (2, 14) or not np.isfinite(a).all() or np.any(np.abs(a[:h]) > 1.000001):
-            raise ValueError("Vial actions must be finite normalized 2x14 commands")
-        if r.shape != (2,) or not np.isfinite(r).all() or not np.isin(r, [0, 1]).all():
+        if a.shape != (horizon, 14) or not np.isfinite(a).all() or np.any(np.abs(a[:h]) > 1.000001):
+            raise ValueError(f"Vial actions must be finite normalized {horizon}x14 commands")
+        if r.shape != (horizon,) or not np.isfinite(r).all() or not np.isin(r, [0, 1]).all():
             raise ValueError("Vial rewards must be per-control native success flags")
         before, after = np.asarray(t.dones, np.float32), np.asarray(t.next_dones, np.float32)
         if before.shape != (4,) or after.shape != (4,) or np.any(after < before):
@@ -106,14 +107,15 @@ class VialOGPOConfig(OGPOConfig):
     discount: float = .999
     subgoals: int = 1  # Number of critic heads; replay always has four labels.
     bf16: bool = False  # Opt-in CUDA compute; weights/Adam and densities stay FP32/FP64.
+    cache_prefix: bool = False
 
     def __post_init__(self):
         if self.method not in ("bon", "ogpo", "vadar"):
             raise ValueError("method must be bon, ogpo or vadar")
         object.__setattr__(self, "subgoals", 4 if self.method == "vadar" else 1)
         super().__post_init__()
-        if self.action_steps != 2 or self.action_dim != 14 or self.state_dim != 15:
-            raise ValueError("Native vial contract is H=2, action14, state15")
+        if self.action_dim != 14 or self.state_dim != 15:
+            raise ValueError("Native vial contract requires action14, state15")
         if isinstance(self.best_of_n, bool) or not isinstance(self.best_of_n, int) or self.best_of_n < 1:
             raise ValueError("best_of_n must be positive")
         if self.bc_anchor_weight or self.step_reward_per_control is not None:
@@ -168,6 +170,8 @@ class VialTrainer(OGPOTrainer):
         c = self.config
         if replay.contract["provenance"] != TASK_ID + ":" + self.provenance:
             raise ValueError("Vial replay and BC/trainer provenance differ")
+        if replay.contract['action_steps'] != c.action_steps:
+            raise ValueError('Vial replay and trainer execution horizons differ')
         rows = replay.sample(c.batch_size)
         batch = self._inputs([r.observation for r in rows])
         next_batch = self._inputs([r.next_observation for r in rows])
@@ -286,7 +290,7 @@ def check_sampling_density(trainer, observations, *, tolerance=1e-7):
 
 
 def import_vial_demonstrations(replay, path, *, manifest, pan_position, instruction, on_progress=None):
-    """Import only manifest training episodes, cut at their first native success."""
+    """Atomically import training episodes through first success, caching one episode."""
     import h5py
     from chemlab_rl.vial_vla_env import sequential_subgoals
     if len(replay):
@@ -294,8 +298,10 @@ def import_vial_demonstrations(replay, path, *, manifest, pan_position, instruct
     if manifest.get("task_id") != TASK_ID or file_sha256(path) != manifest["dataset_sha256"]:
         raise ValueError("Vial dataset task/hash differs from the BC manifest")
     names = manifest["train_episodes"]
+    horizon = replay.contract['action_steps']
     count, controls = 0, 0
-    with h5py.File(path, "r") as handle:
+    with replay.db, h5py.File(path, "r") as handle:
+        replay.db.execute("BEGIN IMMEDIATE")
         for name in names:
             demo = handle["data"][name]
             terminal_indices = np.flatnonzero(np.asarray(demo["dones"], bool))
@@ -304,43 +310,57 @@ def import_vial_demonstrations(replay, path, *, manifest, pan_position, instruct
             length = int(terminal_indices[0]) + 1
             if length != manifest["episode_lengths"][name]:
                 raise ValueError(f"{name}: first-terminal length differs from BC manifest")
+            # Repeated single-frame reads decompress the same HDF5 image chunks.
+            # Read one retained episode at a time; preserve original image bytes.
+            keys = ("joint_pos", "object", "top1_image", "robot0_eye_in_hand_image",
+                    "robot1_eye_in_hand_image")
+            observed = {key: demo["obs"][key][:length] for key in keys}
+            following = {key: demo["next_obs"][key][:length] for key in keys}
+            recorded_actions = demo["actions"][:length]
             labels = np.zeros(4, np.float32)
-            for start in range(0, length, 2):
-                stop = min(start+2, length)
+            for start in range(0, length, horizon):
+                stop = min(start+horizon, length)
                 h = stop-start
                 before = labels.copy()
                 for i in range(start, stop):
-                    labels = sequential_subgoals(labels, demo["next_obs/joint_pos"][i],
-                                                  demo["next_obs/object"][i], pan_position=pan_position)
+                    labels = sequential_subgoals(labels, following["joint_pos"][i],
+                                                  following["object"][i], pan_position=pan_position)
                 terminal = stop == length
                 if bool(labels[-1]) != terminal:
                     raise ValueError(f"{name}: native task labels disagree with first recorded terminal")
-                actions = np.zeros((2, 14), np.float32)
-                actions[:h] = demo["actions"][start:stop]
-                rewards = np.zeros(2, np.float32)
+                actions = np.zeros((horizon, 14), np.float32)
+                actions[:h] = recorded_actions[start:stop]
+                rewards = np.zeros(horizon, np.float32)
                 rewards[h-1] = float(terminal)
-                replay.add(VialTransition(canonical_hdf_observation(demo["obs"], start, instruction),
-                                          canonical_hdf_observation(demo["next_obs"], stop-1, instruction),
-                                          actions, before, labels.copy(), rewards, terminal, False, h))
+                transition = VialTransition(canonical_hdf_observation(observed, start, instruction),
+                                            canonical_hdf_observation(following, stop-1, instruction),
+                                            actions, before, labels.copy(), rewards, terminal, False, h)
+                payload = replay._encode_transition(transition)
+                replay.db.execute("INSERT INTO transitions(payload) VALUES (?)", (payload,))
                 count += 1
             controls += length
             if on_progress:
                 on_progress(dict(event="demo_import", episode=name, effective_controls=length,
                                  replay_transitions=count))
+        replay.db.execute("DELETE FROM transitions WHERE id IN "
+                          "(SELECT id FROM transitions ORDER BY id DESC LIMIT -1 OFFSET ?)",
+                          (replay.contract["capacity"],))
     return dict(episodes=names, transitions=count, effective_controls=controls,
                 terminal_rule="first_native_success_inclusive", heldout_imported=False)
 
 
-def collect_vial_chunk(env, observation, info, trainer, replay, *, max_steps=2):
+def collect_vial_chunk(env, observation, info, trainer, replay, *, max_steps=None):
     if info.get("task_id") != TASK_ID or info.get("success"):
         raise ValueError("Vial collection requires a live nonterminal native task state")
+    horizon = trainer.config.action_steps
+    if max_steps is None:max_steps = horizon
     if not isinstance(max_steps, int) or max_steps < 1:
         raise ValueError("Positive collection allowance required")
     before = actor_observation(observation, env.instruction)
     planned = trainer.sample_actions([before])[0].detach().cpu().numpy()
-    actions, rewards = np.zeros((2, 14), np.float32), np.zeros(2, np.float32)
+    actions, rewards = np.zeros((horizon, 14), np.float32), np.zeros(horizon, np.float32)
     terminated = truncated = False
-    for i in range(min(2, max_steps)):
+    for i in range(min(horizon, max_steps)):
         actions[i] = planned[i]
         observation, reward, terminated, truncated, final_info = env.step(actions[i])
         rewards[i] = reward
@@ -349,7 +369,7 @@ def collect_vial_chunk(env, observation, info, trainer, replay, *, max_steps=2):
             final_info = final_info.get("final_info", final_info)
             break
     h = i+1
-    truncated = bool(truncated or (h < 2 and not terminated))
+    truncated = bool(truncated or (h < horizon and not terminated))
     replay.add(VialTransition(before, actor_observation(observation, env.instruction), actions,
                               np.asarray(info["subgoal_dones"], np.float32),
                               np.asarray(final_info["subgoal_dones"], np.float32), rewards,
@@ -360,9 +380,12 @@ def collect_vial_chunk(env, observation, info, trainer, replay, *, max_steps=2):
 
 
 def run_vial_online(env, trainer, replay, *, max_environment_steps, max_updates,
-                    max_seconds, checkpoint_path, seed=0, checkpoint_every=25, on_update=None):
+                    max_seconds, checkpoint_path, seed=0, checkpoint_every=25, on_update=None,
+                    update_every_chunks=1):
     """Warm critics from imported demos, then alternate real chunks and updates."""
-    if min(max_environment_steps, max_updates, checkpoint_every) < 1 or not np.isfinite(max_seconds) or max_seconds <= 0:
+    if (isinstance(update_every_chunks, bool) or not isinstance(update_every_chunks, int)
+            or min(max_environment_steps, max_updates, checkpoint_every, update_every_chunks) < 1
+            or not np.isfinite(max_seconds) or max_seconds <= 0):
         raise ValueError("Positive finite run budgets required")
     if len(replay) < trainer.config.batch_size:
         raise ValueError("Import enough demonstration transitions before warmup")
@@ -386,20 +409,29 @@ def run_vial_online(env, trainer, replay, *, max_environment_steps, max_updates,
             on_update(metrics)
         if updates % checkpoint_every == 0:
             trainer.save_checkpoint(checkpoint_path, replay)
+            if on_update:
+                on_update(dict(event='checkpoint',path=str(checkpoint_path),
+                               actor_updates=trainer.actor_updates,critic_updates=trainer.critic_updates))
     while trainer.critic_updates < trainer.config.critic_warmup_updates and within_budget():
         update(warmup=True)
     warmup_seconds = time.monotonic()-started
     observation, info = env.reset(seed=seed)
     episode_controls, episode_stages = 0, np.zeros(4, np.float32)
     records = []
+    chunks = 0
     while controls < max_environment_steps and within_budget():
         observation, info, result = collect_vial_chunk(env, observation, info, trainer, replay,
                                                       max_steps=max_environment_steps-controls)
         controls += result["executed_steps"]
+        chunks += 1
         episode_controls += result["executed_steps"]
         episode_stages = np.maximum(episode_stages, info["subgoal_dones"])
-        if within_budget():
+        if within_budget() and (chunks % update_every_chunks == 0 or controls >= max_environment_steps):
             update()
+        if on_update and chunks % 10 == 0:
+            on_update(dict(event="online_progress", environment_steps=controls,
+                           subgoal_dones=episode_stages.tolist(),
+                           max_current_door_opening_m=float(np.max(info["doors"])) if "doors" in info else None))
         if result["terminated"] or result["truncated"]:
             successes += int(bool(info["success"]))
             episodes += 1
@@ -413,7 +445,11 @@ def run_vial_online(env, trainer, replay, *, max_environment_steps, max_updates,
                 observation, info = env.reset(seed=seed+episodes)
                 episode_controls, episode_stages = 0, np.zeros(4, np.float32)
     trainer.save_checkpoint(checkpoint_path, replay)
+    if on_update:
+        on_update(dict(event='checkpoint',path=str(checkpoint_path),
+                       actor_updates=trainer.actor_updates,critic_updates=trainer.critic_updates))
     return dict(method=trainer.config.method, environment_steps=controls, updates=updates,
+                update_every_chunks=update_every_chunks,
                 completed_episodes=episodes, online_successes=successes, episodes=records,
                 elapsed_seconds=time.monotonic()-started, actor_updates=trainer.actor_updates,
                 critic_updates=trainer.critic_updates, closed_loop_evaluated=False,
@@ -423,7 +459,7 @@ def run_vial_online(env, trainer, replay, *, max_environment_steps, max_updates,
 
 
 @torch.no_grad()
-def evaluate_vial_trainer(env, trainer, *, seeds=(1000,), max_steps=1600):
+def evaluate_vial_trainer(env, trainer, *, seeds=(1000,), max_steps=1600, on_progress=None):
     """Same EMA stochastic sampler/BoN selection used online; no privileged labels."""
     if max_steps < 1 or not seeds:
         raise ValueError("Evaluation requires seeds and a positive horizon")
@@ -434,17 +470,25 @@ def evaluate_vial_trainer(env, trainer, *, seeds=(1000,), max_steps=1600):
             trainer.generator.manual_seed(int(seed))
             obs, info = env.reset(seed=int(seed))
             stages, count, terminated, truncated = np.zeros(4), 0, False, False
+            max_door_opening = 0.
             while count < max_steps and not (terminated or truncated):
                 actions = trainer.sample_actions([actor_observation(obs, env.instruction)])[0].cpu().numpy()
-                for action in actions[:min(2, max_steps-count)]:
+                for action in actions[:min(trainer.config.action_steps, max_steps-count)]:
                     obs, _, terminated, truncated, info = env.step(action)
                     count += 1
                     stages = np.maximum(stages, info["subgoal_dones"])
+                    if "doors" in info:
+                        max_door_opening = max(max_door_opening, float(np.max(info["doors"])))
+                    if on_progress and (count == 1 or count % 100 == 0 or terminated or truncated):
+                        on_progress(dict(event="evaluation_progress", seed=int(seed), controls=count,
+                                         subgoal_dones=stages.tolist(), max_door_opening_m=max_door_opening,
+                                         success=bool(info["success"])))
                     if terminated or truncated:
                         break
             episodes.append(dict(seed=int(seed), success=bool(info["success"]), controls=count,
                                  subgoal_dones=stages.tolist(), balance_g=float(info["balance_g"]),
                                  terminated=bool(terminated), truncated=bool(truncated or count >= max_steps),
+                                 max_door_opening_m=max_door_opening,
                                  fixed_scene=True))
     finally:
         trainer.generator.set_state(saved_rng)
@@ -452,5 +496,5 @@ def evaluate_vial_trainer(env, trainer, *, seeds=(1000,), max_steps=1600):
                 success_rate=float(np.mean([e["success"] for e in episodes])),
                 sampler="frozen_bc_stochastic_chain_bon" if trainer.config.method == "bon" else "ema_actor_stochastic_chain",
                 best_of_n=trainer.config.best_of_n if trainer.config.method == "bon" else 1,
-                flow_steps=trainer.config.chain.steps, action_steps=2,
+                flow_steps=trainer.config.chain.steps, action_steps=trainer.config.action_steps,
                 fixed_scene=True, independent_initial_conditions=False)

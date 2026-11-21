@@ -47,7 +47,7 @@ def trainer(method="ogpo", **kwargs):
                               critic_warmup_updates=0, actor_microbatch_size=1,
                               actor_lr=1e-5, chain=ChainConfig(steps=2, diffusion_scale=.2))
     cfg = replace(cfg, **kwargs)
-    critic = VectorQEnsemble(2, subgoals=cfg.subgoals, members=2, hidden=12)
+    critic = VectorQEnsemble(2, action_steps=cfg.action_steps, subgoals=cfg.subgoals, members=2, hidden=12)
     critic.heads[1].load_state_dict(critic.heads[0].state_dict())
     return vial.VialTrainer(Velocity(), critic, preprocessor=preprocess,
                             feature_fn=lambda batch: batch[STATE_KEY][:, :2],
@@ -177,7 +177,20 @@ def test_runner_optimizer_rollout_evaluation_and_checkpoint_round_trip(tmp_path)
     data.close()
 
 
-def test_importer_excludes_heldout_and_discards_post_success_controls(tmp_path):
+def test_runner_collection_cadence_keeps_all_controls_and_final_update(tmp_path):
+    agent, data = trainer(critic_warmup_updates=1), replay(tmp_path / "cadence.sqlite")
+    for i in range(4):
+        data.add(row(i))
+    result = vial.run_vial_online(NativeContractEnvironment(), agent, data,
+                                  max_environment_steps=8, max_updates=10, max_seconds=60,
+                                  update_every_chunks=2, checkpoint_path=tmp_path / "cadence.pt")
+    assert result["environment_steps"] == 8 and agent.environment_steps == 8
+    assert result["actor_updates"] == 3 and result["critic_updates"] == 4
+    assert result["update_every_chunks"] == 2
+    data.close()
+
+
+def test_importer_excludes_heldout_and_discards_post_success_controls(tmp_path, monkeypatch):
     path = tmp_path / "demos.hdf5"
     pan = np.array([.1, .09, .864])
     joints = np.zeros((6, 14), np.float32)
@@ -206,7 +219,35 @@ def test_importer_excludes_heldout_and_discards_post_success_controls(tmp_path):
                                             pan_position=pan, instruction="Place the vial.")
     assert result["effective_controls"] == 4 and result["transitions"] == 2
     assert len(data) == 2 and sum(t.terminated for t in data.sample(2)) == 1
+    stored = [data._decode(payload) for (payload,) in data.db.execute("SELECT payload FROM transitions ORDER BY id")]
+    with h5py.File(path) as f:
+        for i, transition in enumerate(stored):
+            before = vial.canonical_hdf_observation(f["data/train/obs"], 2*i, "Place the vial.")
+            after = vial.canonical_hdf_observation(f["data/train/next_obs"], 2*i+1, "Place the vial.")
+            for key in before:
+                np.testing.assert_array_equal(transition.observation[key], before[key])
+                np.testing.assert_array_equal(transition.next_observation[key], after[key])
     data.close()
+
+    limited = vial.VialReplay(tmp_path / "limited.sqlite", provenance="test", capacity=1)
+    vial.import_vial_demonstrations(limited, path, manifest=manifest, pan_position=pan, instruction="Place the vial.")
+    assert len(limited) == 1 and limited.sample(1)[0].terminated
+    limited.close()
+
+    failed = replay(tmp_path / "failed.sqlite")
+    original = failed._encode_transition
+    calls = 0
+    def fail_second(transition):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise ValueError("injected serialization failure")
+        return original(transition)
+    monkeypatch.setattr(failed, "_encode_transition", fail_second)
+    with pytest.raises(ValueError, match="injected serialization"):
+        vial.import_vial_demonstrations(failed, path, manifest=manifest, pan_position=pan, instruction="Place the vial.")
+    assert len(failed) == 0 and failed.checkpoint_state()["revision"] == 0
+    failed.close()
 
 
 def test_replay_rejects_success_without_termination_and_invalid_action_scale(tmp_path):
@@ -222,3 +263,66 @@ def test_density_gate_recomputes_complete_matching_chain():
     result = vial.check_sampling_density(trainer(), [observation(), observation(1)])
     assert result["passed"] and result["ratio_min"] == pytest.approx(1.)
     assert result["chain_shape"] == [2, 3, 50, 32]
+
+
+def test_25_control_collection_stops_at_success_and_masks_suffix(tmp_path):
+    agent=trainer('vadar',action_steps=25)
+    data=vial.VialReplay(tmp_path/'long.sqlite',provenance='shared-bc',action_steps=25)
+    env=NativeContractEnvironment();obs,info=env.reset()
+    _,_,result=vial.collect_vial_chunk(env,obs,info,agent,data)
+    assert result['terminated'] and result['executed_steps']==3 and env.t==3
+    stored=data.sample(1)[0]
+    assert stored.actions.shape==(25,14) and stored.rewards.shape==(25,)
+    assert stored.rewards[2]==1 and not stored.rewards[3:].any()
+    assert not stored.actions[3:].any()
+    evaluated=vial.evaluate_vial_trainer(env,agent,seeds=(1001,),max_steps=1600)
+    assert evaluated['action_steps']==25 and evaluated['episodes'][0]['controls']==3
+    assert evaluated['success_rate']==1
+    data.close()
+
+
+def test_25_control_td_discount_uses_actual_horizon(tmp_path,monkeypatch):
+    agent=trainer('vadar',action_steps=25,critic_warmup_updates=10,discount=.9)
+    for model in (agent.critic,agent.target_critic):
+        with torch.no_grad():
+            for p in model.parameters():p.zero_()
+            for head in model.heads:head[-1].bias.fill_(2)
+    data=vial.VialReplay(tmp_path/'long.sqlite',provenance='shared-bc',action_steps=25)
+    for h,truncated in [(25,False),(7,True)]:
+        data.add(row(actions=np.zeros((25,14),np.float32),rewards=np.zeros(25,np.float32),
+                     executed_steps=h,truncated=truncated))
+    targets=[];original=vial.vector_critic_loss
+    def capture(predicted,target):
+        targets.extend(target.cpu().tolist());return original(predicted,target)
+    monkeypatch.setattr(vial,'vector_critic_loss',capture)
+    result=agent.update(data)
+    assert result['actual_horizon_mean']==16
+    np.testing.assert_allclose(sorted(targets),sorted([[-1+2*.9**25]*4,[-1+2*.9**7]*4]),atol=1e-6)
+    agent.save_checkpoint(tmp_path/'trainer.pt',data)
+    restored=trainer('vadar',action_steps=25,critic_warmup_updates=10,discount=.9)
+    restored.load_checkpoint(tmp_path/'trainer.pt',data)
+    assert restored.critic_updates==1
+    data.close()
+
+
+def test_demonstration_import_25_control_prefix_and_terminal_suffix(tmp_path):
+    path=tmp_path/'demo.hdf5';length=27;pan=np.array([.1,.09,.864])
+    joints=np.zeros((length,14),np.float32);joints[10:,6]=.5
+    obj=np.zeros((length,11),np.float32);obj[:,3]=1;obj[:,2]=.8
+    obj[:26,10]=.1;obj[10:26,2]=.9;obj[26,:3]=pan;obj[26,7]=20
+    with h5py.File(path,'w') as f:
+        g=f.create_group('data/train');g['actions']=np.zeros((length,14),np.float32)
+        g['dones']=np.arange(length)==26
+        for prefix in ('obs','next_obs'):
+            g[prefix+'/joint_pos']=joints;g[prefix+'/object']=obj
+            for key in ('top1_image','robot0_eye_in_hand_image','robot1_eye_in_hand_image'):
+                g[prefix+'/'+key]=np.zeros((length,4,4,3),np.uint8)
+    manifest=dict(task_id=vial.TASK_ID,dataset_sha256=file_sha256(path),train_episodes=['train'],episode_lengths={'train':27})
+    data=vial.VialReplay(tmp_path/'long.sqlite',provenance='test',action_steps=25)
+    result=vial.import_vial_demonstrations(data,path,manifest=manifest,pan_position=pan,instruction='Place vial')
+    rows=[data._decode(p) for (p,) in data.db.execute('SELECT payload FROM transitions ORDER BY id')]
+    assert result['transitions']==2 and result['effective_controls']==27
+    assert [r.executed_steps for r in rows]==[25,2]
+    assert rows[-1].terminated and rows[-1].rewards[1]==1
+    assert not rows[-1].rewards[2:].any() and not rows[-1].actions[2:].any()
+    data.close()

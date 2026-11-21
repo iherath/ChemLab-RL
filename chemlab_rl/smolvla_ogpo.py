@@ -9,6 +9,7 @@ denoising step is averaged out of the likelihood ratio.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from contextlib import contextmanager, nullcontext
 import math
 from typing import Any, Callable, Mapping
 
@@ -44,10 +45,12 @@ class SmolVLAVelocity(nn.Module):
     importing LeRobot. Production uses its pinned attention-mask implementation.
     """
 
-    def __init__(self, policy: nn.Module, *, mask_builder: Callable | None = None):
+    def __init__(self, policy: nn.Module, *, mask_builder: Callable | None = None, cache_prefix: bool = False):
         super().__init__()
         self.policy = policy
         self._mask_builder = mask_builder
+        self.cache_prefix = cache_prefix
+        self._prefix_cache = None
         if getattr(policy.config, "adapt_to_pi_aloha", False):
             raise ValueError("UR actions must not use the ALOHA-specific transform")
         self.policy.eval()
@@ -59,6 +62,30 @@ class SmolVLAVelocity(nn.Module):
         self.policy.eval()
         return self
 
+    @contextmanager
+    def prefix_context(self, batch):
+        """Reuse prefix computation inside one chain, retaining its autograd graph."""
+        if not self.cache_prefix:
+            yield
+            return
+        if self._prefix_cache is not None:
+            raise RuntimeError("Prefix contexts cannot overlap")
+        from lerobot.policies.common.vla_utils import make_att_2d_masks
+        model = self.policy.model
+        images, masks = self.policy.prepare_images(batch)
+        prefix, padding, attention = model.embed_prefix(
+            images, masks, batch["observation.language.tokens"],
+            batch["observation.language.attention_mask"], state=self.policy.prepare_state(batch))
+        _, kv = model.vlm_with_expert.forward(
+            attention_mask=make_att_2d_masks(padding, attention),
+            position_ids=padding.long().cumsum(dim=1)-1,
+            past_key_values=None, inputs_embeds=[prefix, None], use_cache=True)
+        self._prefix_cache = (padding, kv)
+        try:
+            yield
+        finally:
+            self._prefix_cache = None
+
     def forward(self, batch: Batch, latent: Tensor, tau: Tensor | float) -> Tensor:
         config = self.policy.config
         if latent.ndim != 3 or latent.shape[1:] != (config.chunk_size, config.max_action_dim):
@@ -66,6 +93,16 @@ class SmolVLAVelocity(nn.Module):
         tau = _batch_time(tau, latent)
         if ((tau < 0) | (tau > 1)).any():
             raise ValueError("Forward flow time tau must be in [0,1]")
+        if self._prefix_cache is not None:
+            padding, kv = self._prefix_cache
+            saved = [(layer.keys, layer.values) for layer in kv.layers]
+            try:
+                # Native backward-time velocity; restore the unchanged prefix after each step.
+                native = self.policy.model.denoise_step(padding, kv, latent, 1.0-tau)
+            finally:
+                for layer, (keys, values) in zip(kv.layers, saved):
+                    layer.keys, layer.values = keys, values
+            return -native
         if self._mask_builder is None:
             from lerobot.policies.common.vla_utils import make_att_2d_masks
             mask_builder = make_att_2d_masks
@@ -177,13 +214,15 @@ def sample_chain(velocity: Velocity, batch: Batch, shape: tuple[int, int, int], 
     latent = torch.randn(shape, device=device, dtype=torch.float32, generator=generator)
     states = [latent]
     log_prob = _initial_log_prob(latent)
-    for k in range(config.steps):
-        tau = torch.full((shape[0],), k / config.steps, device=latent.device, dtype=latent.dtype)
-        mean, variance = transition_parameters(latent, velocity(batch, latent, tau), tau, config)
-        noise = torch.randn(shape, device=latent.device, dtype=latent.dtype, generator=generator)
-        latent = mean + variance.sqrt() * noise
-        log_prob = log_prob + _normal_log_prob(latent, mean, variance)
-        states.append(latent)
+    context = velocity.prefix_context(batch) if hasattr(velocity, "prefix_context") else nullcontext()
+    with context:
+        for k in range(config.steps):
+            tau = torch.full((shape[0],), k / config.steps, device=latent.device, dtype=latent.dtype)
+            mean, variance = transition_parameters(latent, velocity(batch, latent, tau), tau, config)
+            noise = torch.randn(shape, device=latent.device, dtype=latent.dtype, generator=generator)
+            latent = mean + variance.sqrt() * noise
+            log_prob = log_prob + _normal_log_prob(latent, mean, variance)
+            states.append(latent)
     return ChainSample(torch.stack(states, dim=1).detach(), log_prob.detach())
 
 
@@ -198,15 +237,14 @@ def chain_log_prob(velocity: Velocity, batch: Batch, latents: Tensor, config: Ch
         raise ValueError("Expected latents [B,K+1,H,D]")
     fixed = latents.detach()
     log_prob = _initial_log_prob(fixed[:, 0])
-    for k in range(config.steps):
-        # Stacking the path inserts K+1 between batch items. Its time slice is
-        # therefore strided, unlike the original contiguous sampler state.
-        # Float32 Linear kernels can round differently on these two layouts;
-        # match sampling layout before recomputing a density (not a tolerance fix).
-        x = fixed[:, k].contiguous()
-        tau = torch.full((x.shape[0],), k / config.steps, device=x.device, dtype=x.dtype)
-        mean, variance = transition_parameters(x, velocity(batch, x, tau), tau, config)
-        log_prob = log_prob + _normal_log_prob(fixed[:, k + 1], mean, variance)
+    context = velocity.prefix_context(batch) if hasattr(velocity, "prefix_context") else nullcontext()
+    with context:
+        for k in range(config.steps):
+            # Match the contiguous sampler layout during density rescoring.
+            x = fixed[:, k].contiguous()
+            tau = torch.full((x.shape[0],), k / config.steps, device=x.device, dtype=x.dtype)
+            mean, variance = transition_parameters(x, velocity(batch, x, tau), tau, config)
+            log_prob = log_prob + _normal_log_prob(fixed[:, k + 1], mean, variance)
     return log_prob
 
 

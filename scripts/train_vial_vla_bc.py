@@ -109,6 +109,8 @@ def main(argv=None):
     parser.add_argument("--pretrained", default=PRETRAINED_MODEL)
     parser.add_argument("--revision", default=None)
     parser.add_argument("--resume", type=Path)
+    parser.add_argument("--reuse-resume-checkpoint", action="store_true",
+                        help="Keep a complete checkpoint already in this output directory unchanged on resume")
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--steps", type=int, default=2000)
     parser.add_argument("--max-seconds", type=float, default=1740)
@@ -200,7 +202,18 @@ def main(argv=None):
         return target
 
     # Save an initial model and its deterministic held-out metric for comparison.
-    last_checkpoint = checkpoint()
+    if args.reuse_resume_checkpoint:
+        expected = args.output / f'checkpoint_{step:06d}'
+        if not args.resume or args.resume.resolve() != expected.resolve():
+            raise ValueError('Reusing a checkpoint requires resuming inside the same run directory')
+        evaluation = json.loads((expected / 'heldout_evaluation.json').read_text())
+        if not evaluation.get('completed'):
+            raise ValueError('Cannot reuse an incomplete held-out checkpoint')
+        evaluations[step] = evaluation
+        last_checkpoint = expected
+        print(json.dumps(dict(event='checkpoint_reused',path=str(expected),step=step)),flush=True)
+    else:
+        last_checkpoint = checkpoint()
     iterator = iter(loader)
     losses = []
     reason = "steps"
