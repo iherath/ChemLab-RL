@@ -1,19 +1,22 @@
 # BC400k checkpoint and training handoff
 
-Get the `checkpoint_400000` folder from the team's Google Drive. It is the
-original 400,000-update BC model, not the subsequently RL-fine-tuned policy.
-Large checkpoint and dataset files are shared separately from Git.
+Run the downloader included in this repository to get the complete
+`checkpoint_400000` folder from the
+[GitHub release](https://github.com/iherath/ChemLab-RL/releases/tag/vial-bc400k-2026-11-21).
+It is the original 400,000-update BC model, not the subsequently RL-fine-tuned
+policy. Large weights are release assets; the downloader is ordinary Git code.
 
 ## Setup
 
 ```sh
-git fetch origin
-git switch --track origin/codex/vial-bc400k-handoff
+git pull --ff-only
+python3 download_checkpoint.py --output runs/shared_bc/checkpoint_400000
 bash scripts/bootstrap_vial_training.sh
 source .venv-vial/bin/activate
 ```
 
-Place the complete downloaded folder at `runs/shared_bc/checkpoint_400000`.
+The command downloads, verifies and extracts the checkpoint at
+`runs/shared_bc/checkpoint_400000`; no manual release downloads are needed.
 Keep `model.safetensors`, `config.json`, `data_manifest.json`, both policy
 processor JSON files and their normalizer safetensors, `run_config.json`,
 `heldout_evaluation.json`, and the `tokenizer/` directory together.
