@@ -41,7 +41,7 @@ def test_same_seed_same_actions_replay_exactly(env):
     rng = np.random.default_rng(0)
     env.reset(seed=7)
     base = env.hold_action()
-    actions = [base + np.r_[rng.normal(0, 0.01, 6), 0, rng.normal(0, 0.01, 6), 0].astype(np.float32)
+    actions = [base + np.r_[rng.normal(0, 0.01, 6), 0, rng.normal(0, 0.01, 6), 0, 0.01, 3.0, 0.0].astype(np.float32)
                for _ in range(10)]
     traj = []
     for a in actions:

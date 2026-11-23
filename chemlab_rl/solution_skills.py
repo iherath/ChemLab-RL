@@ -48,11 +48,6 @@ BARREL, PLUNGER = "right", "left"
 BARREL_ROT = RIGHT_FRONT
 TOP_DOWN = _face([0, 0, -1], [0, 1, 0])     # pointing down, jaws close along y
 TOP_DOWN_X = _face([0, 0, -1], [1, 0, 0])   # pointing down, jaws along x (wrist mount off the balance)
-RIGHT_HOLD = _face([0, np.cos(np.deg2rad(35)), -np.sin(np.deg2rad(35))], [1, 0, 0])
-# ^ right hand on the vial body from the front, tilted 35 deg down: a level grip that
-#   low drives the forearm into the table (planner search over tilts/heights/seeds).
-AXIAL_GRASP = _face([1, 0, 0], [0, 0, 1])    # left hand from -x, jaws close along z:
-VIAL_AXIAL_H = 0.0331                            # fingers on the cap top and the vial base
 
 
 # ------------------------------------------------------------------ parameters
@@ -65,22 +60,22 @@ PARAM_RANGES = {
     "vial_tip_below_rim": (0.035, 0.045),   # deep (still above 3 mL of liquid): hands stay low
     "follow_speed": (0.8, 1.2),         # Session speed scale for fine moves
     "cap_carry_h": (0.05, 0.08),
-    "hold_h": (0.021, 0.025),           # right-hand pinch on the vial body: low, so its finger links stay under the rim
-    "hold_grip": (225.0, 240.0),
     "twist_rate": (2.0, 3.0),           # rad/s of cap rotation while screwing
-    "raise_h": (0.07, 0.10),            # straight lift of the capped vial out of its stand
-    "return_h": (0.025, 0.035),         # hand-back height of the vial base above the stand top
-    "handover_dx": (0.04, 0.07),        # then slide it away from the parked syringe
-    "handover_dy": (-0.05, -0.02),      # (further -y runs the right wrist into the column)
-    "axial_standoff": (0.07, 0.10),
-    "axial_depth": (0.008, 0.012),      # stop the pinch this far short of the vial axis
-    "axial_grip": (225.0, 240.0),
-    "shake_amp": (0.020, 0.030),        # m, linear shake half-stroke
-    "shake_hz": (2.0, 2.5),
-    "shake_axis_deg": (-30.0, 30.0),    # shake direction in the horizontal plane (0 = along x)
+    "lift_clear": (0.03, 0.05),         # slow first pull out of the clamp pads
+    "cam_dist": (0.075, 0.09),          # wrist camera -> vial axis at inspection
+    "cam_dz": (0.006, 0.014),           # camera above the aim point (looks slightly down)
+    "shake_axis_jitter": (-12.0, 12.0), # deg off the axis perpendicular to the jaws (see shake_burst)
+    "burst_s": (2.5, 3.5),              # shake burst between looks
+    "start_level": (0.0, 1.999),        # first vigour level (floor -> 0 or 1)
+    "first_half": (0.0, 1.999),         # backdrop half looked at first (floor -> light/dark)
     "air_gap_mL": (0.06, 0.10),         # air pulled in after withdrawing: carry buffer
     "cap_grip": (210.0, 225.0),         # gentler close on the rigid cap (255 over-squeezes)
 }
+
+
+def open_level(gap_m: float) -> float:
+    """Robotiq command that leaves a jaw gap of gap_m (0 = fully open at ~93 mm)."""
+    return float(np.clip(255.0 * (1.0 - gap_m / 0.093), 0.0, 190.0))
 
 
 def sample_params(rng: np.random.Generator) -> dict[str, float]:
@@ -93,6 +88,7 @@ class Bridge:
 
     def __init__(self, env: SolutionPrepEnv, record: bool = True):
         self.env, self.record, self.rows = env, record, []
+        self.shake_cmd = np.zeros(3)            # (amplitude m, frequency Hz, axis deg); 0 = off
         self.session = None
         self.observation = env.observe()
 
@@ -105,7 +101,7 @@ class Bridge:
     def step(self, _raw_ctrl):
         s = self.session
         action = np.concatenate([s.q_cmd["left"], [s.grip_cmd["left"]],
-                                 s.q_cmd["right"], [s.grip_cmd["right"]]]).astype(np.float32)
+                                 s.q_cmd["right"], [s.grip_cmd["right"]], self.shake_cmd]).astype(np.float32)
         prev = self.observation
         obs, reward, term, trunc, info = self.env.step(action)
         if self.record:
@@ -193,10 +189,11 @@ class Expert:
                     if self.s.plan().status == "ok":
                         self.go(side, via, rot, allow, tol=0.02, _via=False)
                         return self.go(side, pos, rot, allow, tol, _via=False)
+            to = np.round(np.asarray(pos, float), 3).tolist()
             if plan.status == "blocked":
-                self.fail(f"{side} move blocked: {'; '.join(plan.reasons)}")
+                self.fail(f"{side} move blocked: {'; '.join(plan.reasons)} (to {to})")
             if plan.status == "contact" and not all(any(a in r for a in allow) for r in plan.reasons):
-                self.fail(f"{side} move contacts: {'; '.join(plan.reasons)}")
+                self.fail(f"{side} move contacts: {'; '.join(plan.reasons)} (to {to})")
             self.s.execute(force=True)
             self.drain()
             p, _ = self.tool(side)
@@ -517,6 +514,9 @@ def acquire_syringe(x: Expert) -> None:
     front = bp + [0, -p["right_standoff"], 0]
     x.right_out(BARREL_ROT)
     x.go(BARREL, bp + [0.08, -0.08, 0.08], BARREL_ROT)
+    # Pre-close to a barrel-sized gap: fully open, the fingers sweep ~45 mm per
+    # side into the vial and reservoir standing either side of the rack.
+    x.loosen(BARREL, open_level(2 * g.outer_r + 0.016))
     for pos in (front + [0, 0, 0.03], front, bp):
         x.go(BARREL, pos, BARREL_ROT, allow=("syringe",))
     x.grip(BARREL, True)
@@ -655,23 +655,6 @@ def return_syringe(x: Expert) -> None:
     x.note("return_syringe", tilt_deg=tilt)
 
 
-def hold_vial(x: Expert) -> None:
-    """Right hand grips the vial body in its stand from the front (35 deg down)."""
-    p = x.params
-    v = x.env.data.body("vial_a").xpos.copy()
-    pinch = v + [0, 0, p["hold_h"]]
-    # Stage high in front of the vial first: from home (behind the balance) a
-    # direct low approach sweeps the forearm through the balance.
-    x.go("right", np.array([pinch[0] + 0.04, pinch[1] - 0.04, BENCH + 0.20]), RIGHT_HOLD)   # direct: clean from home
-    axis = RIGHT_HOLD[:, 2]
-    for pos in (pinch - axis * p["right_standoff"], pinch):
-        x.go("right", pos, RIGHT_HOLD, allow=("vial_a", "vial_stand"))
-    x.grip("right", True, level=p["hold_grip"])
-    if x.holding("right") != "vial_a":
-        x.fail(f"right did not acquire the vial body: {x.env.held}")
-    x.note("hold_vial")
-
-
 def _wrist_reindex(x: Expert, side: str, need: float) -> float:
     """wrist_3 offset (a multiple of pi/2: the cap is round) leaving `need` rad of
     tightening travel (tightening = wrist_3 positive) and >= 0.6 rad of margin the
@@ -706,9 +689,11 @@ def _rotate_wrist(x: Expert, side: str, delta: float, n: int = 30) -> None:
         x.bridge.step(None)
 
 
-def screw_cap(x: Expert, side: str = "left", max_turns: float = 1.15) -> None:
+def screw_cap(x: Expert, side: str = "left", max_turns: float = 1.25, hold: bool = True) -> None:
     """Pick the cap top-down, lower it onto the rim until the thread engages, then
-    turn it (clockwise from above) until it is tight, following the helix down."""
+    turn it (clockwise from above) until it is tight, following the helix down. The vial
+    sits in the stand's spring clamp, which takes the reaction torque (one hand only).
+    ``hold``: keep the cap in hand (the tight thread then carries the vial)."""
     p = x.params
     cap = x.env.data.body("cap").xpos.copy()
     pinch = np.array([cap[0], cap[1], BENCH + 2 * CAP_HALF_H + 0.0062])
@@ -764,6 +749,10 @@ def screw_cap(x: Expert, side: str = "left", max_turns: float = 1.15) -> None:
         x.env_idle()
     if not x.env.tight:
         x.fail(f"cap not tight: thread at {np.degrees(x.env.scene.thread_turn()):.0f} deg")
+    if hold:
+        regrip_body(x, side)
+        x.note("screw_cap", turns=x.env.scene.thread_turn() / (2 * np.pi))
+        return
     # Open only partway: fully open, the pads swing into the holding hand's fingers.
     x.s.queue.append({"kind": "grip", "side": side, "to": 140.0})
     x.drain()
@@ -775,114 +764,221 @@ def screw_cap(x: Expert, side: str = "left", max_turns: float = 1.15) -> None:
     x.note("screw_cap", turns=x.env.scene.thread_turn() / (2 * np.pi))
 
 
-def raise_vial(x: Expert) -> None:
-    """Right hand lifts the capped vial straight up out of its stand."""
-    rp, _ = x.cmd_tool("right")
-    up = rp + [0, 0, x.params["raise_h"]]
-    x.follow({"right": (up, RIGHT_HOLD)}, tol=0.006)
-    # Slide it away from the parked syringe so the other hand can reach around it.
-    x.go("right", up + [x.params["handover_dx"], x.params["handover_dy"], 0], RIGHT_HOLD, allow=("vial_a", "cap"))
-    if x.holding("right") != "vial_a":
-        x.fail("dropped the vial while raising it")
-    x.note("raise_vial", base=np.round(x.env.data.body("vial_a").xpos, 3).tolist())
+# ------------------------------------------------- lift, inspect, shake, put back
+BODY_GRIP_Z = 0.037         # pinch height above the vial base for the body grasp (20 mm below the rim;
+                            # 34 mm gave 8.6 mm pad penetrations under shaking)
+BODY_GRIP = (220.0, 232.0)  # Robotiq command on the 28 mm glass body
 
 
-def axial_grasp(x: Expert) -> None:
-    """Left hand takes the vial from the side with one finger on the cap top and one
-    under the base; then the right hand lets go and backs off."""
-    p = x.params
-    v = x.env.data.body("vial_a").xpos.copy()
-    centre = v + [0, 0, VIAL_AXIAL_H] - AXIAL_GRASP[:, 2] * p["axial_depth"]   # palm off the
-    back = -AXIAL_GRASP[:, 2] * p["axial_standoff"]                              # right fingers
-    for pos in (centre + back + [0, 0, 0.04], centre + back, centre):
-        x.go("left", pos, AXIAL_GRASP, allow=("vial_a", "cap"))
-    x.swap_grips("left", p["axial_grip"], "right")
-    if x.holding("left") != "vial_a":
-        x.fail(f"left did not take the vial top-to-bottom: {x.env.held}")
-    # The right hand is boxed in (left fingers above/below the vial, the gantry
-    # column behind its wrist), so the LEFT hand slides the vial out forward along
-    # the right gripper's open approach axis; then the right lifts straight up.
+def regrip_body(x: Expert, side: str = "left") -> None:
+    """With the vial still in the clamp, let go of the tight cap and grip the vial BODY
+    20 mm below the rim, fingers straddling the cap. Shaking a vial held by its cap tilted
+    it ~4 deg in the pads and the cap's sharp rim dug > 1 mm into a pad; the glass body
+    (flat collision faces, 20 g) is the sturdy hold, as a person would shake it."""
+    x.loosen(side, open_level(0.044))                       # ~44 mm: clears the 27 mm cap
+    tp, tr = x.cmd_tool(side)
+    x.follow({side: (tp + [0, 0, 0.004], tr)}, tol=0.003, speed=0.3)
+    # Jaws along world x: the clamp rollers sit at +-y (pads on the rollers' sides tilted the
+    # vial 4-5 deg going back in), and with jaws along y the shaking went unstable. Quarter
+    # turn of wrist_3 if needed (round parts).
+    jaw = x.cmd_tool(side)[1][:, 1]
+    if abs(jaw[0]) < 0.7:
+        arm, q3 = x.s.arms[side], x.s.q_cmd[side][5]
+        turn = min((np.pi / 2, -np.pi / 2), key=lambda t: -min(q3 + t - arm.q_lo[5], arm.q_hi[5] - q3 - t))
+        _rotate_wrist(x, side, turn, n=20)
+    base = x.env.data.body("vial_a").xpos
+    tp, tr = x.cmd_tool(side)
+    x.follow({side: (np.array([*tp[:2], base[2] + BODY_GRIP_Z]), tr)}, tol=0.002, speed=0.3)
+    x.grip(side, True, level=float(np.mean(BODY_GRIP)))
+    if x.holding(side) != "vial_a":
+        x.fail(f"{side} did not grip the vial body: {x.env.held}")
+
+
+def lift_out(x: Expert) -> None:
+    """Left (holding the tight cap) pulls the vial straight up out of the clamp, then on
+    up to above the inspection height."""
+    from chemlab_rl.solution_scene import INSPECT_BASE_Z
+    if x.holding("left") != "vial_a" or not x.env.tight:
+        x.fail(f"lift_out needs the tightened cap in the left hand (held {x.env.held}, tight {x.env.tight})")
     lp, lr = x.cmd_tool("left")
-    x.follow({"left": (lp + RIGHT_HOLD[:, 2] * 0.06, lr)}, tol=0.006, speed=0.5)
-    if x.holding("left") != "vial_a":
-        x.fail("lost the vial sliding it out of the right hand")
-    x.grip("right", False)
-    rp, rr = x.cmd_tool("right")
-    x.follow({"right": (rp + [0, 0, 0.08], rr)}, tol=0.008)
-    x.right_home()                                            # planned park via the high route
-    x.note("axial_grasp")
-
-
-def shake(x: Expert, max_s: float = 45.0) -> None:
-    """Left hand shakes the vial linearly until the solution is homogeneous."""
-    p = x.params
-    centre, rot = x.cmd_tool("left")
-    a = np.deg2rad(p["shake_axis_deg"])
-    axis = np.array([np.cos(a), np.sin(a), 0.0])
-    w, amp = 2 * np.pi * p["shake_hz"], p["shake_amp"]
-    n, t, agit = 0, 0.0, []
-    while n < max_s * 10 and not x.env.liquid.homogeneous:
-        t += 0.1
-        ramp = min(1.0, t / 0.6)
-        x.servo({"left": (centre + axis * ramp * amp * np.sin(w * t), rot)}, ticks=1)
-        if x.holding("left") != "vial_a":
-            x.fail("dropped the vial while shaking")
-        agit.append(x.env.agitation)
-        n += 1
-    x.servo({"left": (centre, rot)}, ticks=5)
-    if not x.env.liquid.homogeneous:
-        x.fail(f"not homogeneous after {max_s:.0f} s (undissolved {x.env.liquid.undissolved_g:.4f} g)")
-    x.note("shake", seconds=n / 10, mean_agitation=float(np.mean(agit)) if agit else 0.0)
-
-
-def hand_back(x: Expert) -> None:
-    """Left brings the vial back above its stand; right re-takes the body from the
-    front (where its wrist has room); left lets go and backs off."""
-    p = x.params
-    stand = x.env.model.body_pos[x.env.scene.stand_body][:2]
-    v = x.env.data.body("vial_a").xpos.copy()
+    v0 = x.env.data.body("vial_a").xpos.copy()
+    # (pads on the cap also touch the neck once it is screwed down: "held" may say vial_a)
+    x.follow({"left": (lp + [0, 0, x.params["lift_clear"]], lr)}, tol=0.004, speed=0.3)
+    if x.env.data.body("vial_a").xpos[2] - v0[2] < 0.8 * x.params["lift_clear"]:
+        x.fail("vial stayed in the clamp (cap slipped?)")
     lp, lr = x.cmd_tool("left")
-    target_base = np.array([*stand, BENCH + STAND_H + STAND_COLLAR + p["return_h"]])
-    x.go("left", lp + (target_base - v), lr, allow=("vial_a", "cap"))
-    # Settle the shake-induced lag, then re-centre on the measured vial pose.
+    up = INSPECT_BASE_Z + 0.05 - x.env.data.body("vial_a").xpos[2]
+    x.follow({"left": (lp + [0, 0, max(0.0, up)], lr)}, tol=0.006)
+    x.note("lift_out", vial_z=float(x.env.data.body("vial_a").xpos[2]))
+
+
+def present_vial(x: Expert, half: str) -> None:
+    """Left brings the held vial to the inspection spot in front of `half` of the backdrop
+    (seen by the fixed 'inspect' camera), arriving from above."""
+    from chemlab_rl.solution_scene import inspect_spot
+    lp, lr = x.cmd_tool("left")
+    off = lp - x.env.data.body("vial_a").xpos                 # tool relative to the vial base
+    target = inspect_spot(half) + off
+    x.go("left", target + [0, 0, 0.04], lr, allow=("vial_a", "cap"))
+    x.follow({"left": (target, lr)}, tol=0.003, speed=0.5)
+    x.vial_half = half
+
+
+def move_spot(x: Expert, half: str) -> None:
+    """Slide the vial sideways to the spot in front of the other half (6 cm)."""
+    from chemlab_rl.solution_scene import inspect_spot
+    lp, lr = x.cmd_tool("left")
+    off = lp - x.env.data.body("vial_a").xpos
+    x.follow({"left": (inspect_spot(half) + off, lr)}, tol=0.003, speed=0.5)
+    x.vial_half = half
+
+
+# (Hz, wrist rotation amplitude rad), all under the UR5e wrist speed limit. The top level is
+# capped at ~15 m/s^2 peak at the tool: above that (4 Hz, 0.11 rad: ~18 m/s^2) the cap pushed
+# the gripper pads just over 1 mm in (pad compression audit).
+SHAKE_LEVELS = [(2.0, 0.15), (2.5, 0.14), (3.0, 0.13), (3.5, 0.11), (4.0, 0.09)]
+
+
+def _shake_axis_deg(x: Expert) -> float:
+    """Horizontal rotation axis PERPENDICULAR to the jaw line: rotating about the line
+    through the two pad contacts is resisted only by torsional friction (the vial swung
+    10-18 deg in the grip and slipped out), any other axis needs the pads to slip."""
+    jaw = x.cmd_tool("left")[1][:, 1]
+    ax = np.cross([0.0, 0.0, 1.0], [jaw[0], jaw[1], 0.0])
+    a = np.degrees(np.arctan2(ax[1], ax[0])) + x.params["shake_axis_jitter"]
+    return float((a + 90.0) % 180.0 - 90.0)                  # an axis: +-180 deg equivalent
+
+
+def shake_burst(x: Expert, level: int, seconds: float) -> None:
+    hz, amp = SHAKE_LEVELS[level]
+    x.shake_level = level
+    x.bridge.shake_cmd = np.array([amp, hz, _shake_axis_deg(x)])
+    try:
+        _idle(x, int(round(seconds * 10)))
+    finally:
+        x.bridge.shake_cmd = np.zeros(3)
+    _idle(x, 4)                                              # amplitude ramps down (0.3 s)
+    if x.holding("left") != "vial_a":
+        x.fail(f"lost the vial while shaking: {x.env.held}")
+
+
+def look(x: Expert):
+    """Hold still for the grains to settle, then the camera detector looks."""
+    from chemlab_rl.solution_detector import SETTLE_S
+    _idle(x, int(round(SETTLE_S * 10)))
+    for _ in range(6):                        # camera-only stillness check (vial may still swing)
+        if x.detector.still(lambda: _idle(x, 3)):
+            break
+    lk = x.detector.look(x.vial_half)
+    x.looks.append(dict(t=lk.t, half=lk.backdrop, score=lk.score, clear=lk.clear,
+                        level=getattr(x, "shake_level", None),
+                        undissolved_frac=x.env.liquid.undissolved_fraction))   # truth: LOG ONLY
+    return lk
+
+
+def choose_backdrop(x: Expert) -> None:
+    """Look at the still vial in front of both halves; keep the one where the solid
+    shows the most (contrast depends on the solid's colour, seen only by the camera)."""
+    first = x.vial_half
+    a = look(x)
+    other = "dark" if first == "light" else "light"
+    move_spot(x, other)
+    b = look(x)
+    best = first if a.score > b.score else other
+    if best != other:
+        move_spot(x, best)
+    x.note("choose_backdrop", scores={first: a.score, other: b.score}, chosen=best)
+
+
+def dissolve_by_sight(x: Expert, max_s: float = 150.0) -> None:
+    """Shake bursts until two consecutive looks are clear. Vigour adapts to progress:
+    a burst that removed < 20 % of the visible solid steps the level up."""
+    level = int(x.params["start_level"])
+    prev = x.looks[-1]["score"] if x.looks else None
+    streak, t0, bursts = 0, x.env.data.time, []
+    while x.env.data.time - t0 < max_s:
+        shake_burst(x, level, x.params["burst_s"])
+        lk = look(x)
+        bursts.append((level, lk.score))
+        streak = streak + 1 if lk.clear else 0
+        if streak >= 2:
+            break
+        if prev is not None and not lk.clear and (prev - lk.score) < 0.2 * max(prev, 1):
+            level = min(level + 1, len(SHAKE_LEVELS) - 1)
+        prev = lk.score
+    else:
+        x.fail(f"solid still visible after {max_s:.0f} s of shaking (score {lk.score})")
+    x.note("dissolve_by_sight", bursts=bursts, seconds=float(x.env.data.time - t0))
+
+
+def _upright_vial(x: Expert, tol_deg: float = 0.7) -> None:
+    """Rotate the left hand about the vial base until the held vial hangs vertical."""
+    from chem_rl_sim.teleop.keyframe import axis_rot
+    for _ in range(5):
+        v = x.env.data.body("vial_a")
+        a = v.xmat.reshape(3, 3)[:, 2]
+        ang = float(np.arccos(np.clip(a[2], -1, 1)))
+        if np.degrees(ang) < tol_deg:
+            return
+        k = np.cross(a, [0, 0, 1.0]); k /= np.linalg.norm(k)
+        Rc = axis_rot(k, ang)
+        lp, lr = x.cmd_tool("left")
+        base = v.xpos.copy()
+        x.servo({"left": (base + Rc @ (lp - base), Rc @ lr)}, ticks=6)
+
+
+def _centre_over(x: Expert, stand) -> None:
     for _ in range(3):
-        x.env_idle()
-    v = x.env.data.body("vial_a").xpos.copy()
-    pinch = v + [0, 0, p["hold_h"]]
-    x.go("right", np.array([pinch[0] + 0.04, pinch[1] - 0.04, BENCH + 0.20]), RIGHT_HOLD)   # same staging as hold_vial
-    for pos in (pinch - RIGHT_HOLD[:, 2] * p["right_standoff"], pinch):
-        x.go("right", pos, RIGHT_HOLD, allow=("vial_a", "cap"))
-    # The left hand spans the 66 mm capped vial: Robotiq command ~74 at that gap,
-    # so "partly open" here is ~35 (the 140 used on 28 mm parts would still clamp).
-    x.swap_grips("right", p["hold_grip"], "left", open_to=35.0)
-    if x.holding("right") != "vial_a":
-        x.fail(f"right did not re-take the vial: {x.env.held}")
-    lp, lr = x.cmd_tool("left")
-    x.follow({"left": (lp - lr[:, 2] * 0.035, lr)}, tol=0.006)                  # clear the vial base
-    x.follow({"left": (lp - lr[:, 2] * 0.075 + [0, 0, 0.02], lr)}, tol=0.006)   # past the right fingers,
-    x.follow({"left": (lp - lr[:, 2] * 0.075 + [0, 0, 0.12], lr)}, tol=0.01)    # over the reservoir; up
-    x.grip("left", False)
-    x.note("hand_back")
-
-
-def place_in_stand(x: Expert) -> None:
-    """Right hand lowers the vial back into its stand, releases and backs off."""
-    p = x.params
-    stand = x.env.model.body_pos[x.env.scene.stand_body][:2].copy()
-    grip_h = x.tool("right")[0][2] - x.env.data.body("vial_a").xpos[2]
-    seat = np.array([*stand, BENCH + STAND_H + grip_h])
-    x.follow({"right": (seat + [0, 0, STAND_COLLAR + 0.04], RIGHT_HOLD)}, tol=0.004, max_s=10)
-    x.follow({"right": (seat + [0, 0, STAND_COLLAR + 0.008], RIGHT_HOLD)}, tol=0.003)
-    for _ in range(3):                                         # centre over the collar
         err = stand - x.env.data.body("vial_a").xpos[:2]
-        rp, _ = x.cmd_tool("right")
-        x.servo({"right": (rp + [*err, 0], RIGHT_HOLD)}, ticks=4)
-    x.follow({"right": (seat + [0, 0, 0.0015], RIGHT_HOLD)}, tol=0.004, speed=0.4, check=False)
-    x.grip("right", False)
-    rp, _ = x.tool("right")
-    x.go("right", rp - RIGHT_HOLD[:, 2] * p["right_standoff"], RIGHT_HOLD, allow=("vial_a", "cap", "vial_stand"))
-    x.go("right", rp - RIGHT_HOLD[:, 2] * p["right_standoff"] + [0, 0, 0.08], RIGHT_HOLD)
-    x.note("place_in_stand")
+        lp, lr = x.cmd_tool("left")
+        x.servo({"left": (lp + [*err, 0], lr)}, ticks=4)
+
+
+def put_back(x: Expert) -> None:
+    """Left straightens the vial, lowers it into the clamp (slowly past the pads), lets go
+    and leaves."""
+    from chemlab_rl.solution_scene import STAND_H
+    stand = x.env.model.body_pos[x.env.scene.stand_body][:2].copy()
+    lp, lr = x.cmd_tool("left")
+    off = lp - x.env.data.body("vial_a").xpos
+    x.go("left", np.array([*(stand + off[:2]), lp[2]]), lr, allow=("vial_a", "cap"))
+    _upright_vial(x)
+    lp, lr = x.cmd_tool("left")
+    off = lp - x.env.data.body("vial_a").xpos
+    seat = np.array([*stand, BENCH + STAND_H]) + off
+    x.follow({"left": (seat + [0, 0, 0.03], lr)}, tol=0.004, max_s=10)
+    _centre_over(x, stand)
+    lp, _ = x.cmd_tool("left")
+    x.follow({"left": (np.array([*lp[:2], seat[2] + 0.02]), lr)}, tol=0.003, speed=0.3)
+    _upright_vial(x, tol_deg=0.5)
+    _centre_over(x, stand)
+    floor = BENCH + STAND_H
+    for k in range(6):                       # closed loop on the vial's height: push past the
+        dz = x.env.data.body("vial_a").xpos[2] - floor          # rollers until it sits down
+        if dz < 0.001:
+            break
+        _centre_over(x, stand)
+        lp, lr = x.cmd_tool("left")
+        x.follow({"left": (lp - [0, 0, dz + 0.0015 + 0.001 * k], lr)}, tol=0.004, speed=0.12, check=False)
+    dz = x.env.data.body("vial_a").xpos[2] - floor
+    if dz > 0.002:
+        x.fail(f"vial not seated in the clamp ({dz * 1000:.1f} mm high)")
+    # Release: open to ~60 mm (42 mm dragged a finger link over the 27 mm cap), lift just
+    # until the pads clear the cap top, slide away from the parked syringe (a wide-open hand
+    # rising past it clipped its thumb press), then open fully and go home.
+    x.loosen("left", open_level(0.060))
+    tp, tr = x.cmd_tool("left")
+    x.follow({"left": (tp + [0, 0, 0.05], tr)}, tol=0.005, speed=0.4)
+    away = x.env.data.body("vial_a").xpos[:2] - x.syringe_base()[:2]
+    away /= max(np.linalg.norm(away), 1e-9)
+    tp, tr = x.cmd_tool("left")
+    x.follow({"left": (tp + [*(0.05 * away), 0.02], tr)}, tol=0.006, speed=0.5)
+    x.grip("left", False)
+    tp, tr = x.cmd_tool("left")              # planned moves out (an unchecked joint-space
+    x.go("left", tp + [0, 0, 0.15], tr)       # return home swept a finger through the syringe)
+    x.go("left", LEFT_PARK, TOP_DOWN_X)
+    dz = x.env.data.body("vial_a").xpos[2] - floor
+    x.note("put_back", seated_dz_mm=float(dz * 1000))
 
 
 def _idle(x: Expert, n: int = 1) -> None:
@@ -902,6 +998,8 @@ def run_expert(env: SolutionPrepEnv, *, seed: int, syringe: str, solid_id: int, 
     env.reset(seed=seed, options=dict(syringe=syringe, solid_id=solid_id, solid_g=solid_g))
     params = params or sample_params(np.random.default_rng(seed + 10_000))
     x = Expert(env, params, record=record)
+    from chemlab_rl.solution_detector import GrainDetector
+    x.detector, x.looks = GrainDetector(env), []
     stage, outcome = "start", "unfinished"
     try:
         stage = "acquire_syringe"; acquire_syringe(x)
@@ -912,13 +1010,13 @@ def run_expert(env: SolutionPrepEnv, *, seed: int, syringe: str, solid_id: int, 
             stage = f"draw_{i}"; draw(x, vol)
             stage = f"dispense_{i}"; dispense(x)
         stage = "return_syringe"; return_syringe(x)
-        stage = "hold_vial"; hold_vial(x)
-        stage = "screw_cap"; screw_cap(x)
-        stage = "raise_vial"; raise_vial(x)
-        stage = "axial_grasp"; axial_grasp(x)
-        stage = "shake"; shake(x)
-        stage = "hand_back"; hand_back(x)
-        stage = "place_in_stand"; place_in_stand(x)
+        stage = "screw_cap"; screw_cap(x, hold=True)
+        stage = "lift_out"; lift_out(x)
+        first = ("light", "dark")[int(params["first_half"])]
+        stage = "present_vial"; present_vial(x, first)
+        stage = "choose_backdrop"; choose_backdrop(x)
+        stage = "dissolve_by_sight"; dissolve_by_sight(x)
+        stage = "put_back"; put_back(x)
         stage = "settle"; _idle(x, 40)
     except SkillFailed as e:
         outcome = f"skill_failed[{stage}]: {e}"
@@ -926,4 +1024,4 @@ def run_expert(env: SolutionPrepEnv, *, seed: int, syringe: str, solid_id: int, 
         outcome = "success" if str(e) == "success" else f"env_terminated[{stage}]: {e}"
     info = env.info()
     return dict(outcome=outcome, success=bool(info["success"]), stage=stage, info=info,
-                rows=x.bridge.rows, params=params, log=x.log, steps=env.steps)
+                rows=x.bridge.rows, params=params, log=x.log, steps=env.steps, looks=x.looks)

@@ -132,15 +132,18 @@ class SolutionState:
     # -- step -----------------------------------------------------------------
     def step(self, dt: float, *, plunger_mL: float, tip_in_reservoir_liquid: bool,
              tip_in_vial_mouth: bool, vial_tilt: float, vial_capped: bool,
-             agitation: float, tip_in_reservoir_mouth: bool = False) -> None:
+             agitation: float, tip_in_reservoir_mouth: bool = False, dissolve: bool = True) -> None:
         """``tip_in_reservoir_mouth``: tip inside the reservoir below its rim (drops
-        expelled there fall back into it); drawing still needs a submerged tip."""
+        expelled there fall back into it); drawing still needs a submerged tip.
+        ``dissolve=False``: the caller moves solid into solution itself (grain model,
+        :meth:`dissolve_mass`); ``agitation`` then only drives mixing."""
         self.capped = bool(vial_capped)
         self._move_plunger(plunger_mL, tip_in_reservoir_liquid, tip_in_vial_mouth,
                            tip_in_reservoir_liquid or tip_in_reservoir_mouth)
         self._spill(dt, float(np.clip(vial_tilt, 0.0, 1.0)))
         a = float(np.clip(agitation, 0.0, MAX_AGITATION))
-        self._dissolve(dt, a)
+        if dissolve:
+            self._dissolve(dt, a)
         rate = MIX_RATE_BASE + MIX_RATE_PER_AGITATION * a
         if self.vial_mL > 1e-9:
             self.homogeneity = 1.0 - (1.0 - self.homogeneity) * math.exp(-rate * dt)
@@ -201,6 +204,24 @@ class SolutionState:
         dm = min(self.undissolved_g * (1.0 - math.exp(-rate * dt)), room, self.undissolved_g)
         self.undissolved_g -= dm
         self.dissolved_g += dm
+
+    @property
+    def saturation_factor(self) -> float:
+        """(1 - C/C_sat) for the vial liquid (0 when empty or saturated)."""
+        if self.vial_mL < 1e-6:
+            return 0.0
+        return max(0.0, 1.0 - self.dissolved_g / self.vial_mL / self.solid.c_sat_g_per_mL)
+
+    def dissolve_mass(self, dm_g: float) -> float:
+        """Move up to dm_g of undissolved solid into solution (limited by saturation and
+        by what is left). Returns the mass actually moved; conservation is exact."""
+        if self.vial_mL < 1e-6 or dm_g <= 0.0:
+            return 0.0
+        room = self.solid.c_sat_g_per_mL * self.vial_mL - self.dissolved_g
+        dm = max(0.0, min(dm_g, room, self.undissolved_g))
+        self.undissolved_g -= dm
+        self.dissolved_g += dm
+        return dm
 
     # -- derived quantities ---------------------------------------------------
     @property

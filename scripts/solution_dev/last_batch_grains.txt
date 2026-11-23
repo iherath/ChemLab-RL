@@ -1,0 +1,9 @@
+1mL seed  0: skill_failed[shake]: not homogeneous after 45 s (undissolved 0.0108 g)                                                                                                     steps  3514 vial 3.0047 pen 0.80mm wall 134s
+2mL seed  0: env_terminated[return_syringe]: deep task contact: syringe_hub|syringe_rack_block_0, 1.002 mm                                                                              steps  1486 vial 2.9884 pen 1.00mm wall 42s
+3mL seed  0: skill_failed[shake]: not homogeneous after 45 s (undissolved 0.0115 g)                                                                                                     steps  2641 vial 2.9915 pen 0.83mm wall 112s
+5mL seed  0: skill_failed[shake]: not homogeneous after 45 s (undissolved 0.0119 g)                                                                                                     steps  2231 vial 2.9957 pen 0.91mm wall 100s
+1mL seed  4: env_terminated[draw_3]: deep task contact: left_grip_left_pad2|syringe_rod, 8.198 mm                                                                                       steps  1672 vial 2.2582 pen 8.20mm wall 47s
+3mL seed  4: env_terminated[axial_grasp]: deep task contact: cap_shell|left_grip_right_pad1, 1.197 mm                                                                                   steps  2243 vial 2.9920 pen 1.20mm wall 86s
+5mL seed  4: env_terminated[axial_grasp]: deep task contact: cap_shell|left_grip_right_pad1, 1.195 mm                                                                                   steps  1777 vial 2.9960 pen 1.19mm wall 73s
+3mL seed  5: env_terminated[axial_grasp]: forbidden contact: left_grip_base#49|syringe_thumb, 0.054 mm                                                                                  steps  1875 vial 2.9919 pen 0.80mm wall 58s
+success 0/8

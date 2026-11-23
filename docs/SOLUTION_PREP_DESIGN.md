@@ -391,3 +391,215 @@ Suggested next steps:
    on the sampled parameters, not the layout.
 3. Then run the 30-episode pilot. Still open: the gap to subtask 1 (weighing into the tared vial on the
    balance, then moving it to the bench).
+
+## Session 2026-11-22 (b): barrel approach fixed, post-dispense blocked by cell geometry
+
+Changes (uncommitted):
+- **Per-size rack height.** `BARREL_PINCH_H = 0.145` replaces `RACK_CLEAR`. Every barrel is pinched
+  145 mm above the bench, so the pads (14.6 mm below the pinch) clear the 117 mm vial/reservoir tops
+  either side of the rack, and every parked syringe tops out at ~205 mm. A single 85 mm needle
+  clearance also fixed the approach, but it put long barrels' tops at 237 mm, into the left hand's
+  space.
+- `acquire_syringe` pre-closes the barrel hand to a barrel-sized gap (`open_level`). A full open
+  sweeps ~45 mm per side into the vial and reservoir.
+- Env horizon 3000 → 4500 steps (a 1 mL episode with four cycles exceeds 3000).
+- Planner failure messages include the target position. `scripts/solution_dev/batch_override.py`
+  names world-geom blocks (`W:column`, ...) instead of the planner's catch-all "table".
+- `hold_vial` takes the high route over the balance if its direct staging is blocked. `hand_back`
+  now returns the vial at the (high) handover pose and parks the left hand; `place_in_stand` carries
+  it back over the stand at that height and then descends. `raise_h` is 0.15–0.18.
+
+Measured (24 episodes, 4 sizes × seeds 0–5, `last_batch_pinch145.txt`): the **liquid pass completes
+on 19/24** (role-swap baseline: ~9/16). First draw+dispense alone: 22/24. Full episodes: **0/24**.
+
+Diagnosis: the "right arm hits table" blocks are all **the gantry column**. Both arms hang from the
+gantry head at y −0.38, the column is between them, and the right arm's base is at x +0.17. The
+prep cluster is at x −0.14…−0.30, so every right-arm vial task (front hold for capping, high
+re-grasp) reaches across the midline and folds the forearm into the column. A reservoir search
+(10 positions) confirmed the current spot is best: elsewhere the barrel-carrying right arm hits the
+balance post or the column at draw_0. The other big class is the parked syringe's thumb press
+against the left gripper (screw_cap coupler, axial-grasp base). Failures depend on the seed and
+repeat across all sizes.
+
+Decision needed (structural, not tuning). Proposed: do everything after racking the syringe with the
+**left arm only**. Screw the cap with the vial in an anti-rotation stand (gripping collar) instead of
+a right-hand hold, side-grasp the capped vial body to shake it, and put it back. This removes every
+cross-body right-arm move after dispensing, but it replaces the handover + top-to-bottom shake
+chosen earlier.
+
+## Solid grains in the liquid (2026-11-22, user decision: option B)
+
+`chemlab_rl/solution_grains.py` (tests: `tests/test_solution_grains.py`, 7 pass; 29 overall).
+- **50 free sphere grains** replace the flat powder disc. Each grain's mass is the episode's
+  `solid_g` split with lognormal sizes; the radius follows from 1.5 g/cm^3 (0.12 g → r ≈ 0.6–0.9 mm).
+  Grains collide only with each other and with an **invisible containment shell** on `vial_a`
+  (collision bit 2; everything else uses bit 1). They never touch grippers, the needle or the glass,
+  and the contact audit skips them.
+- **Liquid forces** every physics substep: buoyancy in the accelerating vial frame, Stokes +
+  quadratic drag toward a lagged bulk-fluid velocity (slosh, τ 60 ms), and seeded eddies scaled by
+  the slosh speed. The free surface tilts with the fluid's acceleration. Dry grains feel none of this.
+- **Dissolution** per grain: Hixson–Crowell cube-root law with a Sherwood-type factor
+  `a0 + sqrt(slip/U_REF)` from each grain's measured slip speed. So vigorous shaking dissolves
+  faster, with diminishing returns. The mass goes through `SolutionState.dissolve_mass`, so
+  conservation stays exact (error ~1e-16 g). Grains shrink (mass, inertia, radius); spent grains are
+  retired (invisible, no collisions).
+- **Containment**: MuJoCo soft contacts let a pile shaken at several g push its outer grains
+  through any shell (they creep out at ~0.1 m/s; a 1 ms timestep made it *worse*). The fix:
+  (1) stiff, thin-transition grain/shell contacts; (2) wide shell staves (narrow ones pushed grains
+  out sideways); (3) a **containment projection** after each physics step. A grain more than 0.6 mm
+  into the shell goes back onto it, and its outward velocity is removed. Projections are counted
+  (`info["grain_projections"]`); escapes are audited and terminate the episode. No escapes up to
+  8 Hz ±5 cm. The timestep stays at 2 ms.
+- **Runtime mass edits need `mj_setConst`** (on a scratch MjData). Without it, changing
+  `body_mass` makes the implicit integrator blow the grains up, and the arm with them.
+
+Measured time to 99% dissolved (0.12 g in 3 mL, vial driven kinematically; `K_GRAIN = 0.1`):
+
+| shake | solid 0 (k 0.2) | solid 4 (k 0.6) |
+| --- | --- | --- |
+| still | > 150 s (< 1% dissolved) | > 150 s |
+| gentle 1.5 Hz ±2 cm | 113 s | 38 s |
+| medium 2.5 Hz ±2.5 cm | 74 s | 25 s |
+| vigorous 4 Hz ±3 cm | 57 s | 19 s |
+| violent 6 Hz ±4 cm | 43 s | 15 s |
+
+Close-up renders: `docs/figures/grains_closeup.png` (settled / shaking / 20 s / 60 s). Note: the
+liquid tint is still driven directly by the hidden undissolved fraction (`turbidity`). A camera
+detector could read the answer from the colour, so this must change before the detector work
+(see the detector plan).
+
+## Left-only post-dispense, shake command, contrast backdrop, detector (2026-11-22, in progress)
+
+New flow after the syringe is racked (`run_expert`): `screw_cap(hold=True)` → `lift_out` →
+`stage_vial` → `camera_to` → `present_vial` → `choose_backdrop` → `dissolve_by_sight` → `put_back`.
+The old right-hand hold / top-to-bottom handover / hand-back skills are gone.
+
+Done and verified:
+- **Spring clamp** in the vial stand (two rubber pads at ±x on spring slides) takes the cap's
+  reaction torque. One hand screws the cap (1.00 turn, no right hand). It holds 0.05 N·m without
+  slip (0.03 needed). 30 g pads, ~1.7 N each: lighter, stiffer pads went 1.16 mm deep on lift-out.
+- **Hold the cap, lift the vial**: after tightening, the left keeps the cap. The thread carries the
+  vial out of the clamp. "held" may read `vial_a`, because the pads also touch the neck.
+- **`impratio` 10 scene-wide**: Leo's parent spec kept 1 over the Robotiq model's 10. At 1, a vial
+  hanging from a cap pinch creeps ~2°/s about the jaw axis and drops in ~10 s. At 10 it holds
+  (1.3°). Grip force and cap torsional friction made no difference. The 32 tests still pass; the
+  liquid pass still completes (screw_cap reached in the 3 mL run). Not yet re-batched.
+- **Shake command** `action[14:17]` = (amplitude rad, Hz, axis °). It is a ROTATION about a
+  horizontal axis through the left flange, on the wrist joints only, applied every physics
+  substep with velocity/inertia feed-forward through the position command
+  (`u = q + kv/kp·q̇ + I/kp·q̈`). The sim's servos are heavily damped (wrist kp 500, kv 100:
+  ~0.8 Hz bandwidth). A translational ±2 cm command at 3 Hz moved the tool only ±5 mm. Amplitude
+  is capped at the UR5e wrist speed limit (3 rad/s). Measured at the tool (levels 2–6 Hz):
+  ±40/34/29/25/21 mm, peak 6–30 m/s², wrist torque ≤ 3 N·m of 28. 14-D actions are still
+  accepted (no shake). Replay stays exact. Schema `solution_prep_v2` now has 17-D actions.
+- **Solid colours** per solid (white, pale yellow, orange, blue, dark brown; green held out).
+  **Liquid look from observable physics only**: cloudiness from *suspended* grains (clears when
+  they settle), tint from *dissolved* coloured solute. The hidden undissolved fraction is no
+  longer painted on the liquid.
+- **Two-tone backdrop** (dark | light panel behind the prep area). `choose_backdrop` looks at the
+  still vial in front of both halves and keeps the one where the solid shows more. It is a
+  test-time choice from the camera only. White solid: light half 429 px vs dark 1407 px
+  (ground truth ~1260).
+- **Detector v1** (`chemlab_rl/solution_detector.py`): the right wrist camera rendered at 896²
+  (same view as the policy's 224²). Vial location from the LEFT tool pose (forward kinematics),
+  never the vial state. The floor band and a clear-liquid reference band are projected; floor
+  pixels > 38 RGB from the reference count. The band is limited to ±0.8 R sideways: the shaded
+  glass silhouette gave a constant ~205 px false positive. Calibrated on 6 solid/backdrop cases
+  against segmentation ground truth: ≤ 4 px when fully dissolved, 15–97 px at 0.3–1.2 %
+  undissolved. So `clear` (≤ 10 px) fires only below ~0.3 %. The expert stops after two
+  consecutive clear looks; the env's state-based success is the honesty gate.
+- Renderer: near plane 0.002 × extent (default clipped anything closer than 12.5 cm) and a
+  1024² offscreen buffer.
+
+**Blocker: the right arm cannot be routed to a camera pose.** Collision-free static camera poses
+exist in front of the vial (both halves, 7–10 cm). But no route from home was found: straight
+joint paths cross the gantry column or bench board; Cartesian legs clip the balance; a
+roadmap planner (IK samples + clear straight joint edges, 4 mm clearance) connects nothing. Spots
+in the right arm's own region (above the balance, camera looking -x) failed the same way. The
+wrist camera sits 16 cm behind and 8 cm beside the tool point, so a close look puts the gripper
+under and past the vial, in the crowded space between the arms. Options:
+(a) a fixed inspection camera on the backdrop frame (adds a 4th observation stream);
+(b) keep searching for a right-arm route (better planner, or a different inspection height/side);
+(c) inspect with the vial back in the clamp, from a high right-arm pose looking down.
+
+### Fixed inspection camera (2026-11-22, user decision) and where it stands
+
+- The right-arm camera was dropped (no collision-free route). A recording of arm swept volumes over
+  8 real episodes (2 cm grid) showed arms pass through ~76 % of the space above the bench with a
+  4 cm margin. Masts and posts near the work area were hit (the right arm's barrel route, the left
+  forearm, which sweeps the far-left strip). So the inspection camera `inspect` is a **long-lens
+  camera on a tripod behind the bench** (1.2 m, 35° down, 8° FOV; no geometry in the cell). The
+  backdrop is a **two-tone mat on the bench** where its line of sight lands. The spot is next to
+  the left arm's home (-0.38, 0.12, base z 1.12), ±3 cm in x for the dark/light half. It is the
+  policy's 4th camera (schema `solution_prep_v3`).
+- In real episodes: capping (clamp, one hand), lift-out, present, `choose_backdrop` (white solid →
+  dark 2732 px vs light 97 px) and the first shake/look cycles all run. The detector ROI uses the
+  planned grasp geometry; the liquid is now nearly transparent (alpha 0.18) so settled grains show
+  through the surface; a camera-only stillness check runs before each look.
+- The shake axis is chosen perpendicular to the jaw line (rotation about the pad-to-pad line is
+  resisted only by torsional friction: the vial swung 10–18° and slipped out).
+- **Open: cap/pad compression during shaking.** The cap is re-gripped 4 mm lower (full cap
+  height), and shake levels are capped at 2–4 Hz (~15 m/s² peak). Pad penetration still reaches
+  1.0–1.75 mm in the first bursts. Because MuJoCo contact stiffness scales with body mass, the cap
+  mass was 10 g (handoff), briefly 40/80 g (reverted). User feedback: masses must be realistic
+  (caps < 1 g, vials 2–3 g). The model vial is a 20 mL scintillation vial (28 × 57 mm, 20 g; real
+  ~15–20 g; 24-400 cap ~2–3 g). The vial spec must be confirmed. Realistic light parts need stiffer
+  contacts, i.e. a finer physics step while a light part is gripped (~2–4× wall time).
+
+### Session 2026-11-23: realistic cap, shake hold, image-located detector, full loop
+
+- Vial spec confirmed by the user: **20 mL scintillation vial, 24-400 cap**. Masses: vial 20 g, cap
+  **2.5 g** (was 10 g, briefly 40/80 g: reverted). Light parts stay stiff via contact impedance,
+  not mass. MuJoCo steady penetration scales with (1-dmax)/dmax, so the cap and the clamp pads use
+  solimp dmax 0.9999.
+- **Shaking grip = vial body, top-down**, 37 mm above the base, re-gripped in the clamp after
+  capping. A cap pinch tilted ~4° and the cap's sharp cylinder rim dug > 1 mm into a pad.
+  Vial glass geoms now have priority 2 and torsional friction: the pads are condim 3, so
+  pad-on-vial had none.
+- **In-hand slip under vibration is a MuJoCo artifact here.** The vial walked ~5 mm per burst down
+  a 45 N grip. That was independent of friction (1.0/1.5), impratio (10/30/100), noslip (3/10/30),
+  contact impedance, condim, grip force (26–45 N), a solid grip cylinder (`vial_a_grip`, bit 4,
+  pads only), grains, and shake axis. Easing the squeeze to touching while welded stopped it
+  (0.24 mm). **`left_shake_hold`**: from the first shake burst on a vial already held between the
+  left pads, the env welds it to the left pad and relaxes the gripper squeeze to the fingers'
+  current position. It releases when the hand opens or the vial touches its stand/clamp. Counted
+  in `info["shake"]["holds"]`. This is the one non-contact constraint besides the cap thread.
+- **Detector v1 is image-located**: the vial floor disk is found in the inspect image (silhouette vs
+  backdrop, bright-floor blob, convex hull, eroded). Grains are scored by median-residual
+  (k 9, > 12): specks survive, edges don't. On a real episode the score falls monotonically
+  (~550 → 0). The expert stopped after two consecutive clear looks exactly when the hidden
+  undissolved fraction hit 0.0 % (no early stop).
+- Clamp pads are now roller-like (R 9 mm, reach 1.5 mm, k 600 N/m): 3 mm pads jammed the vial on
+  insertion (the edge met them near the top, inside the friction angle).
+- Status, 3 mL seed 2: syringe draws/dispenses → one-hand capping (1.00 turn) → lift-out →
+  backdrop choice (white solid → dark) → 18 shake/look bursts to full dissolution → put-back all
+  run. The **last step (put-back/release) still fails** on finger-link/cap or pad contacts. No
+  episode has reached `success` yet.
+- User question (open): hold the vial "vertically" for shaking, i.e. squeeze it end to end (finger
+  on the cap top, finger under the base). The shaking load then runs along the squeeze direction:
+  no slip axis, so likely no shake hold needed. It needs the base free: a stand that supports the
+  vial at its shoulder/side with an open bottom (one hand), or a handover.
+
+### Put-back / release (2026-11-23, user: keep the body grip, fix the release)
+
+Fixed (3 mL seed 2 now runs clean through dissolution, put-back and release):
+- Release: open to ~60 mm, lift 5 cm, slide 5 cm away from the parked syringe, open fully, then
+  PLANNED moves out (up 15 cm, then `LEFT_PARK`). The unchecked joint-space `joint_home` swept a
+  finger through the syringe; a 42 mm opening dragged a finger link over the cap; a full open
+  near the vial clipped the syringe thumb press.
+- The shake hold now releases once the vial leaves the inspection station (6 cm). Released only
+  at the clamp, the full squeeze re-seated the vial ~5° off as it went in.
+- The weld is anchored on the rigid gripper base. On the 3.5 g finger pad it resonated: 8.8 mm pad
+  penetration.
+- Clamp rollers at ±y; the body grip turns its jaws to world x (quarter turn after capping). Jaws
+  on the rollers' sides tilted the vial going in; jaws along y made the shaking unstable.
+- `put_back` straightens the vial, centres it, then seats it in a closed loop on its height.
+
+**Still open:** seating the vial past the clamp rollers. It sticks 2–5 mm high. The rollers' forces
+twist it about the jaw line (the two-pad grip's weak axis: 17° tilt), and pushing harder slides
+it up in the grip until a gripper pad meets a roller or the collar. Options:
+- a lead-in on the stand (chamfered collar / lower rollers);
+- seat the vial with the hand angled so the roller forces act along the jaws;
+- release the vial a few mm above the seat and let the clamp guide it in;
+- relax `_vial_resting` (2 mm) if the clamp's resting height is acceptable.
+No episode has reached `success` yet; no batch has run.

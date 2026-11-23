@@ -38,12 +38,15 @@ import numpy as np
 from chemlab_rl.solution_scene import (BENCH, CAP_HALF_H, NECK_INNER_R, NEEDLE_R, RESERVOIR_ML, STAND_H,
                                        THREAD_FRICTION, THREAD_TURNS,
                                        VIAL_FLOOR, VIAL_H, VIAL_INNER_R, SolutionScene)
+from chemlab_rl.solution_grains import SOLID_RGB
+from chemlab_rl.solution_scene import SOLVENT as SOLVENT_RGBA
 from chemlab_rl.solution_state import (HELD_OUT_SOLID, HELD_OUT_SYRINGE, SOLIDS, SPILL_TOL_ML, SYRINGES,
                                        TOTAL_VOLUME_ML, VOLUME_TOL_ML, SolutionState)
 
 CONTROL_HZ = 10
-CAMERAS = {"top1": "top1", "left_wrist": "left_grip_wrist", "right_wrist": "right_grip_wrist"}
-SCHEMA_VERSION = "solution_prep_v2"
+VIAL_LIQUID_ALPHA = 0.18
+CAMERAS = {"top1": "top1", "left_wrist": "left_grip_wrist", "right_wrist": "right_grip_wrist", "inspect": "inspect"}
+SCHEMA_VERSION = "solution_prep_v3"   # v3: 17-D actions (shake command), 4th camera "inspect"
 SUBGOALS = ("loaded", "dispensed", "capped", "homogeneous")
 TRAIN_SYRINGES = tuple(k for k in SYRINGES if k != HELD_OUT_SYRINGE)
 TRAIN_SOLIDS = tuple(i for i in range(len(SOLIDS)) if i != HELD_OUT_SOLID)
@@ -58,6 +61,23 @@ AGITATION_ACCEL = 1.0      # m/s^2 of vial acceleration -> agitation 1 (calibrat
 AGITATION_OMEGA = 8.0      # rad/s of vial angular speed -> agitation 1
 
 GRASPABLE = ("syringe", "syringe_plunger", "cap", "vial_a")
+
+# Shake command (action[14:17]): the LEFT arm superimposes a sinusoidal ROTATION about a
+# horizontal axis through its wrist flange on its commanded joints, at every physics
+# substep (a 10 Hz action stream cannot express a 3-6 Hz shake). Like a wrist flick it
+# is carried mostly by the light wrist joints; translating the whole arm at several Hz
+# is beyond the UR5e servo bandwidth (a +-2 cm command at 3 Hz moved the tool +-5 mm).
+# Command: amplitude (rad, 0 = off), frequency (Hz), axis angle in the horizontal plane
+# (deg, 0 = rotation about world x).
+SHAKE_LOW = np.array([0.0, 0.0, -90.0], np.float32)
+SHAKE_HIGH = np.array([0.35, 6.0, 90.0], np.float32)
+SHAKE_RAMP_M_S = 0.35 / 0.3          # amplitude slew (rad/s): full amplitude in 0.3 s
+WRIST_SPEED_MAX = 3.0                # rad/s: UR5e wrist joint speed limit (180 deg/s), with margin
+# The sim's joint servos are heavily damped (wrist kp 500, kv 100: ~0.8 Hz bandwidth), so
+# the oscillation is fed forward through the position command: u = q + kv/kp qd + I/kp qdd.
+ACTION_DIM = 17
+GRASP_CMD_MIN = 200.0
+HOLD_RADIUS = 0.06                   # m: the shake hold covers the inspection station only                # gripper command from which bilateral pad contact counts as held
 SUPPORT_OK = {  # resting/support contacts (body roots), any normal
     ("syringe", "syringe_rack"), ("vial_a", "vial_stand"), ("reservoir", "reservoir_stand"),
 }
@@ -72,7 +92,7 @@ def plan_draws(capacity_mL: float, total_mL: float = TOTAL_VOLUME_ML) -> list[fl
 class SolutionPrepEnv(gym.Env):
     metadata = {"render_modes": ["rgb_array"], "render_fps": CONTROL_HZ}
 
-    def __init__(self, *, images: bool = True, image_size: int = 224, max_steps: int = 3000,
+    def __init__(self, *, images: bool = True, image_size: int = 224, max_steps: int = 4500,
                  syringe: str = "3mL", solid_id: int = 0, solid_g: float = 0.12,
                  check_collisions: bool = True, layout_jitter_m: float = 0.02,
                  layout_jitter_yaw_deg: float = 20.0):
@@ -90,6 +110,7 @@ class SolutionPrepEnv(gym.Env):
         for side in ("left", "right"):
             arm = self.session.arms[side]
             low.extend([*arm.q_lo, 0.0]); high.extend([*arm.q_hi, 255.0])
+        low.extend(SHAKE_LOW); high.extend(SHAKE_HIGH)
         self.action_space = gym.spaces.Box(np.array(low, np.float32), np.array(high, np.float32))
         spaces = {"proprio": gym.spaces.Box(-np.inf, np.inf, (14,), np.float32),
                   "lowdim": gym.spaces.Box(-np.inf, np.inf, (16,), np.float32)}
@@ -124,6 +145,9 @@ class SolutionPrepEnv(gym.Env):
         self._board = {g for g in range(m.ngeom) if (m.geom(g).name or "").startswith("board_")}
         self._cap_geom = m.geom("cap_shell").id
         self._vial_geoms = {g for g in range(m.ngeom) if self._root(g) == "vial_a"}
+        self.grains = self.scene.grains
+        self._grain_mask = np.zeros(m.ngeom, bool)
+        self._grain_mask[list(self.grains.geom_set | self.grains.shell_set)] = True
 
     def task_status(self) -> dict:
         return {"success": bool(getattr(self, "subgoal_dones", np.zeros(4))[3])}
@@ -138,6 +162,7 @@ class SolutionPrepEnv(gym.Env):
         return np.concatenate([
             d.qpos[self.scene.arm_qadr["left"]], [d.ctrl[m.actuator("left_grip_fingers_actuator").id]],
             d.qpos[self.scene.arm_qadr["right"]], [d.ctrl[m.actuator("right_grip_fingers_actuator").id]],
+            np.zeros(3),
         ]).astype(np.float32)
 
     # --------------------------------------------------------------------- reset
@@ -157,7 +182,8 @@ class SolutionPrepEnv(gym.Env):
         self.episode_seed = seed
         jitter = options.get("layout_jitter_m", self.layout_jitter_m)
         layout = self.scene.prepare(self.np_random if jitter > 0 else None, jitter,
-                                    options.get("layout_jitter_yaw_deg", self.layout_jitter_yaw_deg))
+                                    options.get("layout_jitter_yaw_deg", self.layout_jitter_yaw_deg),
+                                    solid_g=self.solid_g, grain_seed=seed, solid_rgb=SOLID_RGB[self.solid_id])
         self.layout = layout
         self.session._reset_state()
         self.liquid = SolutionState(syringe=SYRINGES[key], solid=SOLIDS[self.solid_id],
@@ -170,6 +196,17 @@ class SolutionPrepEnv(gym.Env):
         self.engage_step = None
         self._vial_vel = np.zeros(3)
         self.agitation = 0.0
+        self.slip_agitation = 0.0
+        self._osc_amp, self._osc_phase, self._osc_hz = 0.0, 0.0, 0.0
+        self._osc_cmd, self._osc_axis, self._osc_dq = (0.0, 0.0), np.array([1.0, 0, 0]), np.zeros(6)
+        self._osc_kv_kp = self._osc_i_kp = np.zeros(6)
+        self._osc_amp_cap = 0.0
+        self.shake_holds = 0
+        self._hold_grip = 0.0
+        self._hold_anchor = np.zeros(3)
+        self._left_grip_act = self.model.actuator("left_grip_fingers_actuator").id
+        self._jac_data = self.mj.MjData(self.model)
+        self._flange = {s: self.model.body(f"{s}_wrist_3_link").id for s in ("left", "right")}
         self._finished = False
         self._episode_t0 = float(self.data.time)
         self._refresh_visuals()
@@ -213,7 +250,7 @@ class SolutionPrepEnv(gym.Env):
     def _update_grasps(self, action: np.ndarray) -> None:
         held = {}
         for side, grip in (("left", action[6]), ("right", action[13])):
-            if grip < 200:
+            if grip < GRASP_CMD_MIN:
                 continue
             for name, jaws in self._pad_objects(side).items():
                 if len(jaws) == 2:
@@ -250,9 +287,16 @@ class SolutionPrepEnv(gym.Env):
         if not np.isfinite(d.qpos).all() or not np.isfinite(d.qvel).all():
             self.scene.bad = "non-finite physics state"
             return
-        for c in d.contact[:d.ncon]:
-            if c.efc_address < 0 or c.dist > 0:
-                continue
+        n = d.ncon
+        if n == 0:
+            idx = ()
+        else:
+            con = d.contact
+            gg = con.geom[:n]
+            idx = np.flatnonzero((con.efc_address[:n] >= 0) & (con.dist[:n] <= 0)
+                                 & ~self._grain_mask[gg].any(axis=1))
+        for i in idx:
+            c = d.contact[i]
             g, h = int(c.geom1), int(c.geom2)
             names = [self.model.geom(x).name or f"{self._body(x)}#{x}" for x in (g, h)]
             key = "|".join(sorted(names))
@@ -267,6 +311,97 @@ class SolutionPrepEnv(gym.Env):
             if d.body(name).xpos[2] < BENCH - 0.02:
                 self.scene.bad = f"{name} fell below bench"
                 return
+
+    # ---------------------------------------------------------------- shake
+    def _shake_prepare(self, cmd) -> None:
+        """Latch the shake command; joint direction for a unit rotation about the axis
+        through the flange at the commanded left-arm joints (damped pseudo-inverse of the
+        flange's 6-D Jacobian, zero flange translation), recomputed every control step."""
+        amp, hz, axis_deg = (float(v) for v in np.clip(cmd, SHAKE_LOW, SHAKE_HIGH))
+        if hz < 0.2:
+            amp = 0.0
+        self._osc_cmd = (amp, hz)
+        if amp <= 0.0 and self._osc_amp <= 0.0:
+            return
+        if amp > 0.0:
+            self._osc_hz = hz
+            a = np.deg2rad(axis_deg)
+            self._osc_axis = np.array([np.cos(a), np.sin(a), 0.0])
+        arm, sc = self.session.arms["left"], self._jac_data
+        sc.qpos[:] = self.data.qpos
+        sc.qpos[arm.qadr] = self.session.q_cmd["left"]
+        self.mj.mj_kinematics(self.model, sc)
+        self.mj.mj_comPos(self.model, sc)
+        jp, jr = np.zeros((3, self.model.nv)), np.zeros((3, self.model.nv))
+        self.mj.mj_jacBody(self.model, sc, jp, jr, self._flange["left"])
+        Jw = jr[:, arm.dofs[3:]]                         # wrist joints only (light, fast)
+        dq = np.zeros(6)
+        dq[3:] = Jw.T @ np.linalg.solve(Jw @ Jw.T + 1e-4 * np.eye(3), self._osc_axis)
+        self._osc_dq = dq
+        # joint speed limit: scale the amplitude so max |qd| <= WRIST_SPEED_MAX
+        w = 2 * np.pi * max(self._osc_hz, 1e-6)
+        peak = np.abs(dq).max() * w
+        self._osc_amp_cap = WRIST_SPEED_MAX / peak if peak > 0 else 0.0
+        if self._osc_cmd[0] > self._osc_amp_cap:
+            self._osc_cmd = (self._osc_amp_cap, self._osc_cmd[1])
+        acts = arm.arm_act
+        self._osc_kv_kp = -self.model.actuator_biasprm[acts, 2] / self.model.actuator_gainprm[acts, 0]
+        self._osc_i_kp = (self.model.dof_armature[arm.dofs] + 0.02) / self.model.actuator_gainprm[acts, 0]
+
+    def _shake_hold(self) -> None:
+        """From the first shake burst on a vial already held between the left pads until the
+        left hand opens: weld it to the left gripper base (rigid; a weld to the 3.5 g pad on the finger linkage resonated) and relax the gripper squeeze to touching
+        (scene `left_shake_hold`). (Toggling it per burst let the full squeeze creep and tilt
+        the vial between bursts.) It also releases as soon as the vial touches its stand or
+        clamp: a soft weld pushed into the support drove a pad 8 mm into the vial. And it
+        releases once the vial leaves the inspection station (HOLD_RADIUS from where it engaged):
+        released only at the clamp, the full squeeze re-seated the vial 5 deg off as it went in. Sim stand-in for a firm grip: with MuJoCo soft contacts the
+        squeeze itself walked the vibrated vial ~5 mm per burst down the pads, whatever the
+        friction, impratio, noslip, impedance or grip force; weld + relaxed squeeze: 0.2 mm."""
+        d, m, eq = self.data, self.model, self.scene.hold_eq
+        shaking = self._osc_cmd[0] > 0.0 or self._osc_amp > 0.0
+        if shaking and not d.eq_active[eq] and self.held.get("left") == "vial_a":
+            gb, vb = m.body("left_grip_base").id, m.body("vial_a").id
+            Rg = d.xmat[gb].reshape(3, 3)
+            qg, qv, qgi, qrel = (np.zeros(4) for _ in range(4))
+            self.mj.mju_mat2Quat(qg, d.xmat[gb]); self.mj.mju_mat2Quat(qv, d.xmat[vb])
+            self.mj.mju_negQuat(qgi, qg); self.mj.mju_mulQuat(qrel, qgi, qv)
+            m.eq_data[eq, 0:3] = 0.0
+            m.eq_data[eq, 3:6] = Rg.T @ (d.xpos[vb] - d.xpos[gb])
+            m.eq_data[eq, 6:10] = qrel
+            m.eq_data[eq, 10] = 1.0
+            d.eq_active[eq] = 1
+            self.shake_holds += 1
+            self._hold_anchor = d.xpos[vb].copy()
+            # ... and relax the squeeze to the fingers' current position (touching): the
+            # 45 N force-limited squeeze on the round vial is what walks it out of the pads
+            j = m.joint("left_grip_left_driver_joint")
+            self._hold_grip = float(np.clip(255.0 * d.qpos[j.qposadr[0]] / max(float(j.range[1]), 1e-6), 0, 255))
+        elif d.eq_active[eq] and (self.last_action[6] < GRASP_CMD_MIN or self._vial_on_support()
+                                  or np.linalg.norm(d.body("vial_a").xpos - self._hold_anchor) > HOLD_RADIUS):
+            d.eq_active[eq] = 0                      # released when the hand opens or the vial
+                                                     # touches its stand/clamp (contacts take over)
+
+    def _vial_on_support(self) -> bool:
+        d = self.data
+        for c in d.contact[:d.ncon]:
+            ra, rb = self._root(int(c.geom1)), self._root(int(c.geom2))
+            if {ra, rb} == {"vial_a", "vial_stand"} and c.dist < 0.0005:
+                return True
+        return False
+
+    def _shake_substep(self, dt: float) -> np.ndarray:
+        amp_cmd, _ = self._osc_cmd
+        step = SHAKE_RAMP_M_S * dt
+        self._osc_amp = float(np.clip(amp_cmd, self._osc_amp - step, self._osc_amp + step))
+        if self._osc_amp <= 0.0:
+            self._osc_amp, self._osc_phase = 0.0, 0.0
+            return np.zeros(6)
+        w = 2 * np.pi * self._osc_hz
+        self._osc_phase = (self._osc_phase + w * dt) % (2 * np.pi)
+        sn, cs = np.sin(self._osc_phase), np.cos(self._osc_phase)
+        q, qd, qdd = sn, w * cs, -w * w * sn            # per unit amplitude
+        return self._osc_dq * self._osc_amp * (q + self._osc_kv_kp * qd + self._osc_i_kp * qdd)
 
     # ----------------------------------------------------------- measurements
     def _local(self, body: str, point: np.ndarray) -> np.ndarray:
@@ -349,24 +484,43 @@ class SolutionPrepEnv(gym.Env):
         self.model.dof_frictionloss[self.scene.thread_dof[0]] = lo + u * (hi - lo)
 
     def _refresh_visuals(self) -> None:
+        """Vial liquid look from what a camera could physically see: cloudiness from the
+        SUSPENDED solid (none once it settles), tint from DISSOLVED coloured solute. The
+        hidden undissolved fraction is never painted onto the liquid."""
         liq = self.liquid
+        rgb_s = np.array(SOLID_RGB[self.solid_id])
+        susp = self.grains.suspended_fraction(VIAL_FLOOR) * min(1.0, liq.undissolved_g / 0.05)
+        cloud = min(0.6, 1.5 * susp)
+        conc = liq.dissolved_g / max(liq.vial_mL, 1e-6)
+        chroma = float(rgb_s.max() - rgb_s.min())
+        tint = chroma * min(0.35, conc / 0.15)
+        solvent = np.array(SOLVENT_RGBA[:3])
+        rgb = solvent + (tint + cloud) * (rgb_s - solvent)
+        # clear solvent is nearly transparent (a camera looking down through the surface must
+        # see settled grains); suspended solid and dissolved colour make it more opaque
+        rgba = [*np.clip(rgb, 0, 1), min(0.9, VIAL_LIQUID_ALPHA + 0.55 * cloud + 0.3 * tint)]
         self.scene.update_visuals(reservoir_mL=liq.reservoir_mL, vial_mL=liq.vial_mL,
                                   syringe_mL=liq.syringe_liquid_mL, solid_g=liq.undissolved_g,
-                                  turbidity=liq.turbidity)
+                                  turbidity=liq.turbidity, vial_rgba=rgba)
 
     # --------------------------------------------------------------------- step
     def step(self, action):
         if self._finished:
             raise RuntimeError("Episode finished; call reset() before step().")
         action = np.asarray(action, np.float32)
-        if action.shape != (14,) or not np.isfinite(action).all():
-            raise ValueError("Expected 14 finite joint/gripper commands")
+        if action.shape == (14,):                      # joints/grippers only: no shake
+            action = np.concatenate([action, np.zeros(3, np.float32)])
+        if action.shape != (ACTION_DIM,) or not np.isfinite(action).all():
+            raise ValueError(f"Expected {ACTION_DIM} finite commands (14 joint/gripper + 3 shake)")
         action = np.clip(action, self.action_space.low, self.action_space.high)
         self.last_action = action.copy()
         ses = self.session
         ses.q_cmd = {"left": action[:6].astype(float), "right": action[7:13].astype(float)}
         ses.grip_cmd = {"left": float(action[6]), "right": float(action[13])}
         per = max(1, round(0.05 / self.model.opt.timestep))
+        self._shake_prepare(action[14:])
+        self._shake_hold()
+        left_act = ses.arms["left"].arm_act
         for i in range(self.n_substeps):
             if i % per == 0:
                 self._update_grasps(action)
@@ -377,7 +531,15 @@ class SolutionPrepEnv(gym.Env):
                     self.data.ctrl[arm.arm_act] = ses.q_cmd[side] + ff[side]
                     self.data.ctrl[arm.eff_act] = ses.grip_cmd[side]
                 self.data.ctrl[:] = np.clip(self.data.ctrl, self.scene._ctrl_low, self.scene._ctrl_high)
+                base_left = self.data.ctrl[left_act].copy()
+                if self.data.eq_active[self.scene.hold_eq]:
+                    self.data.ctrl[self._left_grip_act] = self._hold_grip
+            if self._osc_amp > 0.0 or self._osc_cmd[0] > 0.0:
+                self.data.ctrl[left_act] = np.clip(base_left + self._shake_substep(self.model.opt.timestep),
+                                                   self.scene._ctrl_low[left_act], self.scene._ctrl_high[left_act])
+            self.grains.apply_forces(self.model.opt.timestep, self.liquid.vial_mL, VIAL_INNER_R, VIAL_FLOOR)
             self.mj.mj_step(self.model, self.data)
+            self.grains.contain(VIAL_FLOOR, VIAL_H)
             if self.check_collisions:
                 self.watch()
                 if self.scene.bad:
@@ -391,7 +553,12 @@ class SolutionPrepEnv(gym.Env):
                              tip_in_vial_mouth=geo["tip_in_vial_mouth"], vial_tilt=geo["vial_tilt"],
                              tip_in_reservoir_mouth=geo["tip_in_reservoir_mouth"],
                              vial_capped=self.tight,
-                             agitation=geo["agitation"])
+                             agitation=geo["agitation"], dissolve=False)
+            self.slip_agitation = self.grains.dissolve(self.dt, self.liquid.solid, self.liquid.saturation_factor,
+                                                       self.liquid.dissolve_mass)
+            lost = self.grains.escaped(VIAL_FLOOR, VIAL_H)
+            if lost:
+                self.scene.bad = f"grains escaped the vial: {lost[:5]}"
         self.agitation = geo["agitation"]
         self._refresh_visuals()
         self.mj.mj_forward(self.model, self.data)
@@ -447,6 +614,11 @@ class SolutionPrepEnv(gym.Env):
                     capped=self.tight, cap_engaged=self.engaged, engage_step=self.engage_step,
                     thread_turn_deg=float(np.degrees(self.scene.thread_turn())),
                     held=dict(self.held), agitation=self.agitation, seed=getattr(self, "episode_seed", None),
+                    slip_agitation=getattr(self, "slip_agitation", 0.0), grains=self.grains.stats(),
+                    grain_projections=int(self.grains.projections),
+                    shake=dict(amp_m=self._osc_amp, hz=self._osc_hz, cmd_amp_m=self._osc_cmd[0],
+                               hold_active=bool(self.data.eq_active[self.scene.hold_eq]), holds=self.shake_holds),
+                    grain_mass_error_g=float(self.grains.undissolved_kg * 1e3 - liq.undissolved_g),
                     layout=getattr(self, "layout", None), elapsed_s=float(self.data.time - self._episode_t0),
                     settled_s=self.settled_s, failure=self.scene.bad or "", instruction=self.instruction,
                     physics_checks=self.physics_checks,
