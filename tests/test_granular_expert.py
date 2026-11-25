@@ -76,6 +76,27 @@ def test_cup_servo_uses_reacquired_live_grasp_instead_of_stale_hold():
     np.testing.assert_array_equal(env.data.qpos, np.zeros(10))
 
 
+def test_cup_servo_corrects_endpoint_lag_through_more_physical_actions():
+    env,demo,old,_,controls=cup_servo_fixture()
+    target=env.data.tip+np.array([.005,0.,0.])
+    def step(_):
+        controls.append(True)
+        env.data.tip=target-np.array([.0045 if len(controls)==1 else .0005,0.,0.])
+    demo.scene.step=step
+    assert expert._move_cup(demo,env,old,target,seconds=.1,speed=1.)
+    assert len(controls)==2 and env.scene.bad is None
+    np.testing.assert_array_equal(env.data.qpos,np.zeros(10))
+
+
+def test_cup_servo_rejects_persistent_tracking_error_after_bounded_actions():
+    env,demo,old,_,controls=cup_servo_fixture()
+    target=env.data.tip+np.array([.005,0.,0.])
+    assert not expert._move_cup(demo,env,old,target,seconds=.1,speed=1.)
+    assert len(controls)==6
+    assert env.scene.bad=='scoop tracking error 5.00 mm'
+    np.testing.assert_array_equal(env.data.qpos,np.zeros(10))
+
+
 @pytest.mark.parametrize('lost_before_first_tick', [True, False])
 def test_cup_servo_stops_before_next_ik_when_physical_grasp_is_absent(lost_before_first_tick):
     env, demo, old, used, controls = cup_servo_fixture()
@@ -226,6 +247,55 @@ def test_depth_correction_tracks_moving_source_through_controls(monkeypatch):
     np.testing.assert_array_equal(env.data.qpos, np.zeros(10))
 
 
+def test_depth_correction_raises_only_the_deficit_below_the_command(monkeypatch):
+    env, record = fake_env(), bridge()
+    targets = []
+
+    def move(demo, env, hold, target, rotation, **kwargs):
+        targets.append(target.copy())
+        if len(targets) == 1:
+            env.data.tip = target + np.array([0., 0., .0017])
+        elif len(targets) == 2:
+            env.data.tip = target - np.array([0., 0., .00031])
+        else:
+            env.data.tip = target.copy()
+        return True
+
+    monkeypatch.setattr(expert, '_move_cup', move)
+    assert expert._verify_loading_depth(SimpleNamespace(idle=lambda _: True), env, object(), record,
+                                         .006, cycle=0, attempt=0)
+    assert len(targets) == 3
+    np.testing.assert_allclose(targets[1], targets[0])
+    assert targets[2][2] - targets[1][2] == pytest.approx(.000155)
+    assert not env.scene.bad
+
+
+def test_depth_waits_out_a_vial_rebound_and_retargets_once(monkeypatch):
+    env, record = fake_env(), bridge()
+    env.dt = .1
+    targets, post_move = [], []
+
+    def move(demo, env, hold, target, rotation, **kwargs):
+        targets.append(target.copy())
+        env.data.tip = target.copy()
+        return True
+
+    def idle(n):
+        if n == 4:
+            post_move.append(n)
+            if len(post_move) <= 3:
+                env.data.body('source').xpos += np.array([0., 0., .0004])
+        return True
+
+    monkeypatch.setattr(expert, '_move_cup', move)
+    assert expert._verify_loading_depth(SimpleNamespace(idle=idle), env, object(), record,
+                                         .006, cycle=0, attempt=0)
+    assert len(targets) == 4
+    assert targets[3][2] - targets[2][2] == pytest.approx(.0004)
+    assert any(row['phase'] == 'depth_settle' for row in record.expert_trace)
+    assert not env.scene.bad
+
+
 def test_depth_failure_is_bounded_and_lateral_clearance_is_separate(monkeypatch):
     env, record = fake_env(), bridge()
     moves = []
@@ -287,12 +357,80 @@ def test_new_inflight_mass_during_carry_blocks_every_tilt(monkeypatch):
         env.grain_state['inflight_g'] = .04
         return True
     monkeypatch.setattr(expert, '_move_cup', move)
+    monkeypatch.setattr(expert, '_plan_pour_route', lambda demo, env: (*expert.POUR_ROUTES[0], True))
     assert not expert._pour_complete_batch(SimpleNamespace(idle=lambda _: True), env, object(), record, 0)
-    assert len(rotations) == 2
+    assert len(rotations) == 3
     for rotation in rotations:
         np.testing.assert_allclose(rotation @ SCOOP_FRAME[:, 2], [0., 0., 1.])
     assert 'unsafe retained batch before pour' in env.scene.bad
     assert record.expert_trace[-1]['phase'] == 'pre_pour_guard'
+
+
+def test_pour_heading_is_absolute_across_repeated_cycles():
+    env=fake_env()
+    pivot,rotation,transit=expert._pour_poses(env)
+    env.data.body('spatula').xmat=rotation_z(.8).ravel()
+    repeated=expert._pour_poses(env)
+    np.testing.assert_allclose(repeated[0],pivot)
+    np.testing.assert_allclose(repeated[1],rotation)
+    np.testing.assert_allclose(rotation@SCOOP_FRAME[:,2],[0.,0.,1.],atol=1e-14)
+    heading=np.deg2rad(expert.POUR_HEADING_DEG)
+    np.testing.assert_allclose(pivot-env.data.body('vial_a').xpos,
+        [-expert.POUR_PIVOT_OFFSET_M*np.cos(heading),
+         -expert.POUR_PIVOT_OFFSET_M*np.sin(heading),expert.POUR_PIVOT_HEIGHT_M])
+    assert transit[2]>=pivot[2]+.015
+
+
+@pytest.mark.parametrize('drains', [True,False])
+def test_drain_hold_servos_compensated_pose_with_a_physical_time_bound(monkeypatch,drains):
+    env,record=fake_env(tool=.16),bridge()
+    env.data.time,env.dt=0.,.1
+    env.scene.free={'spatula':(24,22)}
+    env.scene.carried=[SimpleNamespace(side='right',adr=24)]
+    pivot=env.data.tip.copy()
+    holds=[]
+    def move(demo,env_,hold,target,rotation=None,**kwargs):
+        env.data.time+=env.dt
+        if record.expert_phase in ('drain_hold','drain_shake'):
+            assert kwargs.get('compensate', False) is (record.expert_phase=='drain_hold')
+            assert kwargs['seconds']==(env.dt if record.expert_phase=='drain_hold' else 1.5)
+            np.testing.assert_array_equal(target,pivot)
+            holds.append(env.data.time)
+            if drains and len(holds)==2:
+                env.grain_state.update(tool_g=0.,receiver_g=.16)
+        return True
+    monkeypatch.setattr(expert,'_move_cup',move)
+    demo=SimpleNamespace(idle=lambda _: pytest.fail('drain must servo, not latch'),
+                         session=SimpleNamespace(q_cmd={'right':np.arange(6)/10}))
+    ok=expert._tilt_complete_batch(demo,env,object(),record,0,pivot,np.eye(3),np.ones(3))
+    np.testing.assert_array_equal(demo.tip_bias,np.zeros(3))
+    assert ok is drains
+    if drains:
+        assert len(holds)==2 and env.scene.bad is None
+    else:
+        assert expert.DRAIN_HOLD_LIMIT_S<=holds[-1]-holds[0]+env.dt<=expert.DRAIN_HOLD_LIMIT_S+env.dt+1e-9
+        assert any(row['phase']=='drain_shake' for row in record.expert_trace)
+        assert env.scene.bad=='complete batch did not drain within physical hold'
+    np.testing.assert_array_equal(env.data.qpos,np.zeros(10))
+
+
+@pytest.mark.parametrize('failure',['contact','position'])
+def test_latched_drain_stops_on_measured_grasp_or_position_loss(monkeypatch,failure):
+    env,record=fake_env(tool=.16),bridge()
+    env.dt=.1;env.scene.free={'spatula':(24,22)}
+    env.scene.carried=[SimpleNamespace(side='right',adr=24)]
+    pivot=env.data.tip.copy();actions=[]
+    def move(*args,**kwargs):
+        if record.expert_phase=='drain_hold':
+            actions.append(1);env.data.time+=env.dt
+            if failure=='contact':env.scene.carried=[]
+            else:env.data.tip+=np.array([.0041,0.,0.])
+        return True
+    monkeypatch.setattr(expert,'_move_cup',move)
+    demo=SimpleNamespace(idle=lambda _:True,session=SimpleNamespace(q_cmd={'right':np.zeros(6)}))
+    assert not expert._tilt_complete_batch(demo,env,object(),record,0,pivot,np.eye(3),np.ones(3))
+    assert actions==[1]
+    assert env.scene.bad==('right lost contact-supported spatula grasp' if failure=='contact' else 'drain tracking error 4.10 mm')
 
 
 def test_environment_terminal_success_is_preserved_mid_pour(monkeypatch):

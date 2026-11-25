@@ -20,7 +20,7 @@ from chemlab_rl.scrape_env import ACTION_SEMANTICS, SCHEMA_VERSION
 from scripts.collect_scrape_v2 import (RecorderBridge, EpisodeFinished, _make_demo,
                                      _approach_strict, write_episode)
 
-EXPERT_CONTROLLER = "guarded_complete_batch_v3_centered_pad_patch"
+EXPERT_CONTROLLER = "guarded_complete_batch_v21_depth_settle"
 MIN_LOADING_HEIGHT_M = 0.006
 MAX_LOADING_HEIGHT_M = 0.016
 DEPTH_TOLERANCE_M = 0.00025
@@ -30,6 +30,17 @@ INITIAL_BATCH_BUDGET_G = {"bulk": 0.40, "medium": 0.20}
 OBSERVED_LOAD_HEADROOM_G = 0.025
 MAX_LOAD_ATTEMPTS = 4
 EMPTY_RETRY_STEP_M = 0.00025
+POUR_PIVOT_HEIGHT_M = 0.088
+POUR_PIVOT_OFFSET_M = 0.012
+POUR_HEADING_DEG = -15.
+POUR_CUP_YAW_DEG = 165.
+# (pivot height m, cup yaw deg), lowest drop first; chosen per measured grasp.
+POUR_ROUTES = ((.078, 165.), (.078, 150.), (.078, 180.), (.078, 135.), (.088, 165.), (.088, 150.))
+DRAIN_SHAKE_DEG = 10.
+DRAIN_HOLD_LIMIT_S = 6.
+TIP_INTEGRAL_GAIN = 0.3
+TIP_INTEGRAL_LIMIT_M = 0.006
+POUR_ANGLE_DEG = 94.
 
 
 def source_identity():
@@ -50,8 +61,13 @@ def source_identity():
     return "sha256:" + version, hashes
 
 
-def _move_cup(demo, env, hold, target, rotation=None, *, seconds=None, speed=0.02):
-    """Servo a cup-bottom pose with measured grasp transform and smooth targets."""
+def _move_cup(demo, env, hold, target, rotation=None, *, seconds=None, speed=0.02, compensate=False):
+    """Servo a cup-bottom pose with measured grasp transform and smooth targets.
+
+    With ``compensate``, the commanded tip leads the path by an integral of the
+    measured tip error (``demo.tip_bias``) to cancel steady loaded-arm sag. The
+    acceptance check still measures the actual tip against the true target.
+    """
     mj, legacy = env.mj, env.legacy
     current = legacy._tip(env.data)
     current_r = env.data.body("spatula").xmat.reshape(3, 3).copy()
@@ -65,15 +81,7 @@ def _move_cup(demo, env, hold, target, rotation=None, *, seconds=None, speed=0.0
     angle = 2 * np.arccos(np.clip(np.dot(q0, q1), -1, 1))
     duration = max(float(seconds or 0), np.linalg.norm(target - current) / speed, angle / 0.5, env.dt)
     count = int(np.ceil(duration / env.dt))
-    for index in range(1, count + 1):
-        u = index / count
-        u = u * u * (3 - 2 * u)
-        tip = current + u * (target - current)
-        quaternion = (1 - u) * q0 + u * q1
-        quaternion /= np.linalg.norm(quaternion)
-        mat = np.empty(9)
-        mj.mju_quat2Mat(mat, quaternion)
-        rot = mat.reshape(3, 3)
+    def command_pose(tip, rot):
         # Contact loss/reacquisition replaces the metadata object. Resolve it
         # each tick rather than retaining the Hold returned by the first pick.
         adr = env.scene.free["spatula"][0]
@@ -82,6 +90,14 @@ def _move_cup(demo, env, hold, target, rotation=None, *, seconds=None, speed=0.0
         if hold is None:
             env.scene.bad = "right lost contact-supported spatula grasp"
             return False
+        if compensate:
+            bias = getattr(demo, "tip_bias", np.zeros(3))
+            bias = bias + TIP_INTEGRAL_GAIN * (tip - legacy._tip(env.data))
+            norm = float(np.linalg.norm(bias))
+            if norm > TIP_INTEGRAL_LIMIT_M:
+                bias *= TIP_INTEGRAL_LIMIT_M / norm
+            demo.tip_bias = bias
+            tip = tip + bias
         position, orientation = legacy._tool_for(hold, tip - rot @ SCOOP_TIP, rot)
         session = demo.session
         session._scratch.qpos[:] = env.data.qpos
@@ -92,10 +108,30 @@ def _move_cup(demo, env, hold, target, rotation=None, *, seconds=None, speed=0.0
             return False
         session.q_cmd["right"] = joints
         demo.scene.step(None)
-        if env.scene.bad:
+        return not env.scene.bad
+
+    for index in range(1, count + 1):
+        u = index / count
+        u = u * u * (3 - 2 * u)
+        tip = current + u * (target - current)
+        quaternion = (1 - u) * q0 + u * q1
+        quaternion /= np.linalg.norm(quaternion)
+        mat = np.empty(9)
+        mj.mju_quat2Mat(mat, quaternion)
+        if not command_pose(tip, mat.reshape(3, 3)):
             return False
     # Accept only a measured tip near its requested position. Do not restore it.
     error = float(np.linalg.norm(legacy._tip(env.data) - target))
+    if error > 0.004:
+        # Contact compliance can leave the long tool behind the final target.
+        # Re-measure the grasp and hold the requested pose through bounded
+        # ordinary commands before applying the same tracking rejection limit.
+        for _ in range(5):
+            if not command_pose(target, rotation):
+                return False
+            error = float(np.linalg.norm(legacy._tip(env.data) - target))
+            if error <= 0.001:
+                break
     if error > 0.004:
         env.scene.bad = f"scoop tracking error {error * 1000:.2f} mm"
         return False
@@ -198,13 +234,49 @@ def _check_batch(bridge, env, phase, **details):
     return fits
 
 
+def _source_held_still(demo, env):
+    """Hold while a pushed vial rebounds. Stop once it moves under 0.05 mm for 0.3 s."""
+    origin, _ = _source_pose(env)
+    quiet_steps = 0
+    for _ in range(int(round(2.0 / env.dt))):
+        if not demo.idle(1):
+            return False
+        now, _ = _source_pose(env)
+        if np.linalg.norm(now - origin) <= 5e-5:
+            quiet_steps += 1
+            if quiet_steps * env.dt >= 0.3 - 1e-9:
+                return True
+        else:
+            quiet_steps = 0
+            origin = now.copy()
+    return True
+
+
+def _read_loading_depth(env, depth, target):
+    origin, frame = _source_pose(env)
+    tip = env.legacy._tip(env.data)
+    measured = frame.T @ (tip - origin)
+    return (float(measured[2] - depth), float(np.linalg.norm(measured[:2])),
+            float((target - tip) @ frame[:, 2]), measured)
+
+
 def _verify_loading_depth(demo, env, scoop, bridge, depth, *, cycle, attempt):
     """Measure the bottom height in the source frame after a physical hold."""
     # Recompute the moving vial's pose and use ordinary controls for correction.
+    # A high miss is closed by commanding that same height again. Once the tip
+    # sits below the pose just commanded, repeating it lets a yielding bed
+    # sink further (054: -0.306 mm, then -0.467 mm). Raise by half that
+    # deficit, and only that deficit, so a vial that moved is still followed
+    # at the requested height.
+    below_command_m = 0.0
     for correction in range(3):
-        target, rotation = _source_target(env, depth)
+        command_depth = depth
+        if below_command_m > DEPTH_TOLERANCE_M:
+            command_depth = depth + min(0.5 * below_command_m, 0.001)
+        target, rotation = _source_target(env, command_depth)
         _log_expert(bridge, env, "loading_descent", cycle=cycle, attempt=attempt,
-                    correction=correction, requested_depth_m=depth)
+                    correction=correction, requested_depth_m=depth,
+                    command_depth_m=command_depth)
         if not _move_cup(demo, env, scoop, target, rotation,
                          seconds=.3 if correction else None,
                          speed=.003 if correction else .015):
@@ -215,13 +287,53 @@ def _verify_loading_depth(demo, env, scoop, bridge, depth, *, cycle, attempt):
         measured = frame.T @ (env.legacy._tip(env.data) - origin)
         z_error = float(measured[2] - depth)
         xy_error = float(np.linalg.norm(measured[:2]))
+        below_command_m = float((target - env.legacy._tip(env.data)) @ frame[:, 2])
         _log_expert(bridge, env, "depth_check", cycle=cycle, attempt=attempt,
                     correction=correction, requested_depth_m=depth,
+                    command_depth_m=command_depth,
                     measured_depth_m=float(measured[2]), z_error_m=z_error,
-                    lateral_error_m=xy_error)
+                    lateral_error_m=xy_error, below_command_m=below_command_m)
         if (np.isfinite(measured).all() and abs(z_error) <= DEPTH_TOLERANCE_M
                 and xy_error <= LATERAL_TOLERANCE_M):
             return True
+    # 055: the tip was 0.10 mm from the command while the vial was still
+    # rebounding, so the source-frame reading was 0.47 mm low. Hold for that
+    # rebound, then follow the settled vial once at the same requested height.
+    if (np.isfinite(z_error) and abs(z_error) > DEPTH_TOLERANCE_M
+            and xy_error <= LATERAL_TOLERANCE_M
+            and abs(below_command_m) <= DEPTH_TOLERANCE_M):
+        _log_expert(bridge, env, "depth_settle", cycle=cycle, attempt=attempt,
+                    requested_depth_m=depth, z_error_m=z_error,
+                    below_command_m=below_command_m)
+        if not _source_held_still(demo, env):
+            return False
+        z_error, xy_error, below_command_m, measured = _read_loading_depth(env, depth, target)
+        _log_expert(bridge, env, "depth_check", cycle=cycle, attempt=attempt,
+                    correction=3, requested_depth_m=depth, command_depth_m=depth,
+                    measured_depth_m=float(measured[2]), z_error_m=z_error,
+                    lateral_error_m=xy_error, below_command_m=below_command_m,
+                    settled=True)
+        if (np.isfinite(measured).all() and abs(z_error) <= DEPTH_TOLERANCE_M
+                and xy_error <= LATERAL_TOLERANCE_M):
+            return True
+        if np.isfinite(measured).all() and xy_error <= LATERAL_TOLERANCE_M:
+            target, rotation = _source_target(env, depth)
+            _log_expert(bridge, env, "loading_descent", cycle=cycle, attempt=attempt,
+                        correction=3, requested_depth_m=depth, command_depth_m=depth)
+            if not _move_cup(demo, env, scoop, target, rotation, seconds=.3, speed=.003):
+                return False
+            if not demo.idle(4):
+                return False
+            z_error, xy_error, below_command_m, measured = _read_loading_depth(
+                env, depth, target)
+            _log_expert(bridge, env, "depth_check", cycle=cycle, attempt=attempt,
+                        correction=3, requested_depth_m=depth, command_depth_m=depth,
+                        measured_depth_m=float(measured[2]), z_error_m=z_error,
+                        lateral_error_m=xy_error, below_command_m=below_command_m,
+                        settled=True)
+            if (np.isfinite(measured).all() and abs(z_error) <= DEPTH_TOLERANCE_M
+                    and xy_error <= LATERAL_TOLERANCE_M):
+                return True
     env.scene.bad = f"loading depth miss: z={z_error * 1000:.3f} mm, xy={xy_error * 1000:.3f} mm"
     return False
 
@@ -264,39 +376,154 @@ def _load_batch(demo, env, scoop, bridge, cycle, previous_loads_g):
     return None
 
 
-def _pour_complete_batch(demo, env, scoop, bridge, cycle):
-    upright = _align_cup_axis(env.data.body("spatula").xmat.reshape(3, 3), [0., 0., 1.])
+def _pour_poses(env, height=None, yaw_deg=None):
+    """Use a repeatable cup heading through the open right side of the shield."""
+    height = POUR_PIVOT_HEIGHT_M if height is None else height
+    yaw_deg = POUR_CUP_YAW_DEG if yaw_deg is None else yaw_deg
+    heading, yaw = np.deg2rad([POUR_HEADING_DEG, yaw_deg])
+    direction = np.array([np.cos(heading), np.sin(heading), 0.])
+    upright = np.array([[np.cos(yaw), -np.sin(yaw), 0.],
+                        [np.sin(yaw), np.cos(yaw), 0.], [0., 0., 1.]]) @ SCOOP_FRAME.T
     receiver = env.data.body("vial_a").xpos.copy()
-    pivot = receiver + [-.007, 0., .068]
+    pivot = receiver - POUR_PIVOT_OFFSET_M * direction + [0., 0., height]
     transit = np.array([pivot[0], pivot[1], max(env.legacy._tip(env.data)[2], pivot[2] + .015)])
+    return pivot, upright, transit
+
+
+def _tilt(angle_deg):
+    """Tilt about the horizontal axis normal to the pour heading."""
+    theta, heading = np.deg2rad([angle_deg, POUR_HEADING_DEG])
+    rz = np.array([[np.cos(heading), -np.sin(heading), 0.],
+                   [np.sin(heading), np.cos(heading), 0.], [0., 0., 1.]])
+    turn_y = np.array([[np.cos(theta), 0., np.sin(theta)], [0., 1., 0.],
+                       [-np.sin(theta), 0., np.cos(theta)]])
+    return rz @ turn_y @ rz.T
+
+
+def _route_miss(demo, env, hold, height, yaw, angles):
+    """Worst IK (position m, rotation rad) over a tilt sweep; kinematics only."""
+    arm, scratch = demo.session.arms["right"], demo.session._scratch
+    pivot, upright, _ = _pour_poses(env, height, yaw)
+    q, worst = demo.session.q_cmd["right"].copy(), (0., 0.)
+    for index, angle in enumerate(angles):
+        rot = _tilt(angle) @ upright
+        position, orientation = env.legacy._tool_for(hold, pivot - rot @ SCOOP_TIP, rot)
+        scratch.qpos[:] = env.data.qpos
+        # The sweep starts above the source, far from the pivot.
+        q, position_error, rotation_error = arm.ik(scratch, position, orientation, q,
+                                                   iters=400 if index == 0 else 60)
+        worst = (max(worst[0], position_error), max(worst[1], rotation_error))
+    return worst
+
+
+def _plan_pour_route(demo, env):
+    """Pick the pour route with the smallest IK miss for the measured grasp.
+
+    Kinematics only, on the session's scratch data: no physics step or state
+    write. Reachable yaw depends on the grasp each episode actually acquires.
+    Returns (height, yaw, shake) or None when no route is inside the IK limits.
+    """
+    adr = env.scene.free["spatula"][0]
+    hold = next((item for item in env.scene.carried if item.side == "right" and item.adr == adr), None)
+    if hold is None:
+        return None
+    sweep = np.linspace(0., POUR_ANGLE_DEG, 13)
+    rows = []
+    for height, yaw in POUR_ROUTES:
+        position_error, rotation_error = _route_miss(demo, env, hold, height, yaw, sweep)
+        rows.append((max(position_error / .003, rotation_error / .06), height, yaw))
+    demo.pour_route_table = [dict(height=h, yaw=y, normalized_miss=float(s)) for s, h, y in rows]
+    score, height, yaw = min(rows)
+    if score > .5:
+        return None
+    position_error, rotation_error = _route_miss(demo, env, hold, height, yaw,
+                                                 [POUR_ANGLE_DEG, POUR_ANGLE_DEG + DRAIN_SHAKE_DEG])
+    return height, yaw, bool(position_error <= .0015 and rotation_error <= .03)
+
+
+def _pour_complete_batch(demo, env, scoop, bridge, cycle):
+    route = _plan_pour_route(demo, env)
+    _log_expert(bridge, env, "pour_route_plan", cycle=cycle, route=route,
+                table=getattr(demo, "pour_route_table", None))
+    if route is None:
+        env.scene.bad = "no pour route reachable with the measured grasp"
+        return False
+    height, yaw, demo.drain_shake = route
+    pivot, upright, transit = _pour_poses(env, height, yaw)
+    # Turn the wrist while the loaded cup is still above the source. This
+    # keeps the later tilt inside the side opening without accumulating yaw
+    # across repeated scoop cycles. Only normal joint controls move the tool.
+    _log_expert(bridge, env, "pour_wrist_alignment", cycle=cycle)
+    if not _move_cup(demo, env, scoop, env.legacy._tip(env.data), upright):
+        return False
     _log_expert(bridge, env, "receiver_transit", cycle=cycle)
     if not _move_cup(demo, env, scoop, transit, upright, speed=.030):
         return False
     if not _move_cup(demo, env, scoop, pivot, upright, speed=.020):
         return False
+    return _tilt_complete_batch(demo, env, scoop, bridge, cycle, pivot, upright, transit)
+
+
+def _tilt_complete_batch(demo, env, scoop, bridge, cycle, pivot, upright, transit):
+    """Pour from the guarded receiver pose and return through ordinary controls."""
     # Recheck after carrying: all received, retained, and airborne mass counts.
     if not _check_batch(bridge, env, "pre_pour_guard", cycle=cycle):
         return False
-    theta = np.deg2rad(110.)
-    turn = np.array([[np.cos(theta), 0., np.sin(theta)], [0., 1., 0.],
-                     [-np.sin(theta), 0., np.cos(theta)]])
+    # The diagonal opening direction shortens the reach and keeps the entire
+    # tool and wrist above the table. Actual emptying is still required; an
+    # angle never determines or assigns the transferred mass.
+    turn = _tilt(POUR_ANGLE_DEG)
     _log_expert(bridge, env, "complete_pour", cycle=cycle)
-    if not _move_cup(demo, env, scoop, pivot, turn @ upright, seconds=4.):
+    # The loaded tilted arm sags about 3.5 mm below its joint targets. Each
+    # batch starts its own integral; the 4 mm guards below are unchanged.
+    demo.tip_bias = np.zeros(3)
+    if not _move_cup(demo, env, scoop, pivot, turn @ upright, seconds=6., compensate=True):
         return False
     _log_expert(bridge, env, "drain_hold", cycle=cycle)
-    for _ in range(30):
+    drain_start = float(env.data.time)
+    tilted = turn @ upright
+    while True:
+        adr = env.scene.free["spatula"][0]
+        if not any(item.side == "right" and item.adr == adr for item in env.scene.carried):
+            env.scene.bad = "right lost contact-supported spatula grasp"
+            return False
+        error = float(np.linalg.norm(env.legacy._tip(env.data) - pivot))
+        if error > .004:
+            env.scene.bad = f"drain tracking error {error * 1000:.2f} mm"
+            return False
         if max(env.grain_state["tool_g"], env.grain_state["inflight_g"]) < .5 * env.material.grain_mass_g:
             break
-        if not demo.idle(1):
+        elapsed = float(env.data.time) - drain_start
+        if elapsed >= DRAIN_HOLD_LIMIT_S:
+            env.scene.bad = "complete batch did not drain within physical hold"
             return False
-    else:
-        env.scene.bad = "complete batch did not drain within physical hold"
+        if (getattr(demo, "drain_shake", True) and elapsed >= 1.
+                and env.grain_state["inflight_g"] == 0 and env.grain_state["tool_g"] > 0):
+            # A grain resting in the tilted cup: tip steeper and back through
+            # ordinary commands. The hold limit and 4 mm guard still apply.
+            # The integral that holds the 94 degree pose makes 104 degrees
+            # unreachable. Clearing it is not enough: it rebuilds within a
+            # second (run 049). These two moves are not corrected, so the
+            # commanded pose stays the one the planner checked.
+            _log_expert(bridge, env, "drain_shake", cycle=cycle)
+            demo.tip_bias = np.zeros(3)
+            steeper = _tilt(POUR_ANGLE_DEG + DRAIN_SHAKE_DEG) @ upright
+            for rotation in (steeper, tilted):
+                if not _move_cup(demo, env, scoop, pivot, rotation, seconds=1.5):
+                    return False
+            _log_expert(bridge, env, "drain_hold", cycle=cycle)
+            continue
+        if not _move_cup(demo, env, scoop, pivot, tilted, seconds=env.dt, speed=.05, compensate=True):
+            return False
+    # Rotating back upright at the pivot drops the grasp, and slowing that
+    # rotation changed nothing: 042, 047 and 051 all let go at 178.6 s. The
+    # tilted pose itself holds, so lift clear of the vial before untilting.
+    _log_expert(bridge, env, "receiver_retract", cycle=cycle)
+    if not _move_cup(demo, env, scoop, transit, tilted, speed=.025, compensate=True):
         return False
     _log_expert(bridge, env, "return_upright", cycle=cycle)
-    if not _move_cup(demo, env, scoop, pivot, upright, seconds=4.):
-        return False
-    _log_expert(bridge, env, "receiver_retract", cycle=cycle)
-    return _move_cup(demo, env, scoop, transit, upright, speed=.025)
+    demo.tip_bias = np.zeros(3)
+    return _move_cup(demo, env, scoop, transit, upright, seconds=6., compensate=True)
 
 
 def _expert_info(env, bridge):

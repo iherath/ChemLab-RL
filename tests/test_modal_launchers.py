@@ -464,6 +464,353 @@ class ModalLauncherTests(unittest.TestCase):
         with patch.object(c, 'ROOT', self.path):
             with self.assertRaises(ValueError): c._validate_initial_state_provenance(payload)
 
+    def chain_fixture(self):
+        import tarfile
+        import numpy as np
+        path, payload, _, initial_snapshot = self.continuation_fixture()
+        old_move = '''def _move_cup(demo, env, hold, target, rotation=None):
+    count = 1
+    for index in range(1, count + 1):
+        tip = target
+        mat = rotation
+        rot = mat.reshape(3, 3)
+        demo.scene.step(None)
+        if env.scene.bad:
+            return False
+    error = float(np.linalg.norm(legacy._tip(env.data) - target))
+    if error > 0.004:
+        env.scene.bad = f"scoop tracking error {error * 1000:.2f} mm"
+        return False
+    return True
+'''
+        new_move = '''def _move_cup(demo, env, hold, target, rotation=None):
+    count = 1
+    def command_pose(tip, rot):
+        demo.scene.step(None)
+        return not env.scene.bad
+    for index in range(1, count + 1):
+        tip = target
+        mat = rotation
+        if not command_pose(tip, mat.reshape(3, 3)):
+            return False
+    error = float(np.linalg.norm(legacy._tip(env.data) - target))
+    if error > 0.004:
+        for _ in range(5):
+            if not command_pose(target, rotation):
+                return False
+            error = float(np.linalg.norm(legacy._tip(env.data) - target))
+            if error <= 0.001:
+                break
+    if error > 0.004:
+        env.scene.bad = f"scoop tracking error {error * 1000:.2f} mm"
+        return False
+    return True
+'''
+        prelude = 'DEPTH_TOLERANCE_M = .00025\nLATERAL_TOLERANCE_M = .001\ndef _load_batch():\n    return True\n'
+        old_source, new_source = (prelude + old_move).encode(), (prelude + new_move).encode()
+        source_name = 'scripts/collect_granular_demos.py'
+        old_hashes = {source_name: hashlib.sha256(old_source).hexdigest()}
+        new_hashes = {source_name: hashlib.sha256(new_source).hexdigest()}
+        version = lambda h: 'sha256:' + hashlib.sha256(json.dumps(h, sort_keys=True).encode()).hexdigest()
+        payload.update(scope='saved_state_chained_corrective_continuation_v1', source_version=version(new_hashes), source_files_sha256=new_hashes)
+        (self.path / source_name).write_bytes(new_source)
+        with np.load(initial_snapshot) as z: initial_arrays = {k:z[k].copy() for k in z.files}
+        np.savez(initial_snapshot, **initial_arrays, time=.8)
+        evidence = payload['initial_state_provenance']
+        evidence['snapshot_sha256'] = hashlib.sha256(initial_snapshot.read_bytes()).hexdigest()
+        initial_manifest = self.path / evidence['manifest_path']
+        inventory = json.loads(initial_manifest.read_text()); inventory['final.npz'] = evidence['snapshot_sha256']
+        initial_manifest.write_text(json.dumps(inventory)); evidence['manifest_sha256'] = hashlib.sha256(initial_manifest.read_bytes()).hexdigest()
+        chain_dir = self.path / 'chain'; chain_dir.mkdir()
+        boundary = chain_dir / 'loaded_and_lifted.npz'
+        arrays = {**initial_arrays, 'ctrl':np.full(14,255.), 'qacc_warmstart':np.zeros(1255),
+                  'integration_state':np.zeros(6811), 'integration_state_spec':np.array(16383),
+                  'q_cmd_left':np.zeros(6),'q_cmd_right':np.zeros(6),'grip_cmd_left':np.array(255.),'grip_cmd_right':np.array(255.)}
+        np.savez(boundary, **arrays, time=48.3)
+        endpoint = chain_dir / 'post_pour_settled.npz'; np.savez(endpoint, **arrays, time=70.)
+        cut = dict(stage='loaded_and_lifted', sim_seconds=47.5, failure=None, source_g=3.84, tool_g=.16, receiver_g=0.,inflight_g=0.,spill_g=0.)
+        failure = 'scoop IK miss 0.0146 m/0.011 rad'
+        common = dict(grain_count=200,powder_id=0,seed=None,target_g=.5,physical_validation_scope='rigid_bodies_and_grains',
+                      powder_dynamics='physical_grains_v1',physics_validation='rigid_contact_v1',grain_radius_m=.0015,
+                      grain_mass_g=.02,timestep_s=.00025,max_contact_penetration_m=.0002,
+                      max_grain_contact_penetration_m=.00007,conservation_error_g=0.,total_mass_g=4.,
+                      snapshot_unchanged=True,no_state_writes_after_initialization=True,initialization_contact_model_override=None)
+        p = dict(**common, source_version=version(old_hashes),snapshot_sha256=evidence['snapshot_sha256'],variant='pickup_suffix',
+                 correction_passed=True,lift_passed=True,pour_passed=False,continuation_passed=False,physical_valid=False,failure=failure,
+                 physics_checks=220000,stages=[cut,dict(stage='first_pour_completed',failure=failure)],
+                 expert_trace=[dict(phase='depth_check',sim_seconds=44.3,z_error_m=.000049,lateral_error_m=.000101),
+                               dict(phase='retained_batch',sim_seconds=48.3,batch_fits=True,tool_g=.16)])
+        s = dict(**common,source_version=version(new_hashes),snapshot_sha256=hashlib.sha256(boundary.read_bytes()).hexdigest(),
+                 variant='receiver_transit_suffix',pour_passed=True,continuation_passed=True,physical_valid=True,failure=None,
+                 physics_checks=80000,settled=True,mass_force_agreement=True,tool_g=0.,inflight_g=0.,spilled_g=0.,mass_g=.16,raw_net_mass_g=.159,
+                 stages=[dict(stage='post_pour_settled',sim_seconds=21.7,failure=None)])
+        chain = dict(schema_version=1)
+        for role, source, hashes, outcome, input_file, output_file in [
+                ('prefix',old_source,old_hashes,p,initial_snapshot,boundary),('suffix',new_source,new_hashes,s,boundary,endpoint)]:
+            folder=chain_dir/role; folder.mkdir()
+            probe=folder/'probe.py';probe.write_text('# Immutable executed probe fixture\n')
+            manifest=folder/'source.json';manifest.write_text(json.dumps(dict(source_version=version(hashes),source_files_sha256=hashes,probe_sha256=hashlib.sha256(probe.read_bytes()).hexdigest())))
+            archive=folder/'source-python.tar.gz'
+            with tarfile.open(archive,'w:gz') as t:
+                entry=tarfile.TarInfo(source_name);entry.size=len(source);t.addfile(entry,io.BytesIO(source))
+            result=folder/'outcome.json';result.write_text(json.dumps(outcome))
+            chain[role]={}
+            for key,file in dict(source_manifest=manifest,source_archive=archive,probe=probe,outcome=result,input_snapshot=input_file,output_snapshot=output_file).items():
+                chain[role][key+'_path']=str(file.relative_to(self.path));chain[role][key+'_sha256']=hashlib.sha256(file.read_bytes()).hexdigest()
+            # Synthetic bytes exercise the offline contract; these fixtures
+            # are never represented as captured MuJoCo physics evidence.
+            captures={}
+            for name,phase in [('expected_production','fresh_production_before_overrides'),
+                               ('effective_initial','after_initialization_and_overrides_before_first_step'),
+                               ('effective_final','after_last_step_before_cleanup')]:
+                model=folder/(name+'.mjb');model.write_bytes(b'unit-test compiled native model: impratio=1')
+                captures[name]=dict(capture_phase=phase,model_path=str(model.relative_to(self.path)),model_sha256=hashlib.sha256(model.read_bytes()).hexdigest())
+            physics=folder/'effective_physics.json'
+            physics.write_text(json.dumps(dict(schema_version=1,capture_scope='actual_segment_runtime',
+                  serialization='mujoco_mjb_copy_zero_geom_rgba_v1',excluded_model_fields=['geom_rgba'],mujoco_version='3.16.0',
+                  source_version=version(hashes),probe_sha256=chain[role]['probe_sha256'],captures=captures)))
+            chain[role]['effective_physics_path']=str(physics.relative_to(self.path))
+            chain[role]['effective_physics_sha256']=hashlib.sha256(physics.read_bytes()).hexdigest()
+            outcome.update(effective_physics_sha256=chain[role]['effective_physics_sha256'],
+                           checkpoint_sha256={output_file.name:chain[role]['output_snapshot_sha256']})
+            result.write_text(json.dumps(outcome));chain[role]['outcome_sha256']=hashlib.sha256(result.read_bytes()).hexdigest()
+        audit=chain_dir/'boundary.json';audit.write_text(json.dumps(dict(snapshot_sha256=chain['prefix']['output_snapshot_sha256'],source_version=version(new_hashes),
+              integration_state_restored_exactly=True,controller_state_restored_exactly=True,finite_state=True,source_held=True,right_tool_held=True,
+              receiver_empty_before_tare=True,integration_state_size_valid=True,snapshot_redundant_fields_match_integration_state=True,
+              normalized_model_sha256=hashlib.sha256(b'unit-test compiled native model: impratio=1').hexdigest(),
+              source_g=3.84,tool_g=.16,receiver_g=0.,inflight_g=0.,spilled_g=0.,total_mass_g=4.,conservation_error_g=0.)))
+        chain.update(boundary_audit_path=str(audit.relative_to(self.path)),boundary_audit_sha256=hashlib.sha256(audit.read_bytes()).hexdigest())
+        payload['continuation_chain']=chain
+        payload['stage_summary'].update(physics_checks=300000,physics_checks_scope='prefix_run_including_excluded_tail_plus_suffix_upper_bound',
+              max_grain_contact_penetration_m=.00007,transferred_g=.16,mass_g=.16,raw_net_mass_g=.159,depth_error_m=.000049,lateral_error_m=.000101)
+        path.write_text(json.dumps(payload))
+        return path,payload,(version(new_hashes),new_hashes),old_source,new_source
+
+    def test_chained_partial_gate_preserves_failed_tail_and_counts_zero_demonstrations(self):
+        path,payload,source,_,_=self.chain_fixture()
+        with patch.object(c,'ROOT',self.path),patch.object(c,'_source_identity',return_value=source):
+            gate=c.validate_stage_validation(path)
+        self.assertEqual(gate['accepted_demonstrations_from_gate'],0)
+        self.assertFalse(gate['candidate_data_eligible'])
+        self.assertEqual(gate['continuation_chain']['prefix_cut'],'loaded_and_lifted')
+        self.assertTrue(gate['continuation_chain']['prefix_later_failure_preserved'].startswith('scoop IK miss'))
+        self.assertEqual(gate['continuation_chain']['source_compatibility'],'normal_path_ast_equal_old_success_implies_retry_inactive')
+        self.assertIn('upper_bound',gate['stage_summary']['physics_checks_scope'])
+
+    def test_chained_gate_rejects_state_splice_tamper_missing_archive_and_false_exact_count(self):
+        import copy
+        path,payload,source,_,_=self.chain_fixture()
+        variants=[]
+        bad=copy.deepcopy(payload);bad['continuation_chain']['suffix']['input_snapshot_sha256']='0'*64;variants.append(bad)
+        bad=copy.deepcopy(payload);bad['continuation_chain']['prefix']['source_archive_sha256']='0'*64;variants.append(bad)
+        bad=copy.deepcopy(payload);bad['stage_summary']['physics_checks_scope']='exact_prefix_plus_suffix';variants.append(bad)
+        bad=copy.deepcopy(payload);bad['stage_summary']['physics_checks']=299999;variants.append(bad)
+        with patch.object(c,'ROOT',self.path),patch.object(c,'_source_identity',return_value=source):
+            for bad in variants:
+                path.write_text(json.dumps(bad))
+                with self.assertRaises(ValueError):c.validate_stage_validation(path)
+
+    def test_chained_gate_rejects_failed_unsettled_spilled_or_incomplete_suffix_even_with_updated_file_hash(self):
+        path,payload,source,_,_=self.chain_fixture()
+        record=payload['continuation_chain']['suffix'];file=self.path/record['outcome_path'];original=json.loads(file.read_text())
+        cases=[('pour_passed',False),('failure','deep grain contact'),('settled',False),('spilled_g',.02),('tool_g',.02),
+               ('inflight_g',.02),('mass_g',.06),('raw_net_mass_g',.1),('max_grain_contact_penetration_m',.000656),
+               ('initialization_contact_model_override',{'pad_condim':4}),('source_version','sha256:wrong')]
+        with patch.object(c,'ROOT',self.path),patch.object(c,'_source_identity',return_value=source):
+            for key,value in cases:
+                with self.subTest(key=key):
+                    file.write_text(json.dumps({**original,key:value}));record['outcome_sha256']=hashlib.sha256(file.read_bytes()).hexdigest();path.write_text(json.dumps(payload))
+                    with self.assertRaises(ValueError):c.validate_stage_validation(path)
+
+    def test_chained_gate_rejects_prefix_relabel_or_earlier_failure(self):
+        path,payload,source,_,_=self.chain_fixture()
+        record=payload['continuation_chain']['prefix'];file=self.path/record['outcome_path'];original=json.loads(file.read_text())
+        cases=[{**original,'continuation_passed':True},{**original,'physical_valid':True},
+               {**original,'stages':[{**original['stages'][0],'failure':'forbidden contact'},original['stages'][1]]},
+               {**original,'stages':[{**original['stages'][0],'sim_seconds':48.3},original['stages'][1]]}]
+        with patch.object(c,'ROOT',self.path),patch.object(c,'_source_identity',return_value=source):
+            for bad in cases:
+                file.write_text(json.dumps(bad));record['outcome_sha256']=hashlib.sha256(file.read_bytes()).hexdigest();path.write_text(json.dumps(payload))
+                with self.assertRaises(ValueError):c.validate_stage_validation(path)
+
+    def test_chained_gate_rejects_false_restore_and_nonempty_tare_audit(self):
+        path,payload,source,_,_=self.chain_fixture()
+        chain=payload['continuation_chain'];file=self.path/chain['boundary_audit_path'];original=json.loads(file.read_text())
+        with patch.object(c,'ROOT',self.path),patch.object(c,'_source_identity',return_value=source):
+            for key,value in [('integration_state_restored_exactly',False),('controller_state_restored_exactly',False),
+                              ('integration_state_size_valid',False),('snapshot_redundant_fields_match_integration_state',False),
+                              ('receiver_empty_before_tare',False),('receiver_g',.02),('source_g',3.8)]:
+                file.write_text(json.dumps({**original,key:value}));chain['boundary_audit_sha256']=hashlib.sha256(file.read_bytes()).hexdigest();path.write_text(json.dumps(payload))
+                with self.assertRaises(ValueError):c.validate_stage_validation(path)
+
+    def test_prefix_ast_equivalence_rejects_guard_changes_and_behavior_before_boundary(self):
+        _,_,_,old,new=self.chain_fixture()
+        self.assertEqual(c._verify_prefix_controller_compatibility(old,old),'identical_prefix_controller')
+        for changed in [new.replace(b'range(5)',b'range(6)'),new.replace(b'error > 0.004',b'error > 0.005'),
+                        new.replace(b'count = 1',b'count = 2'),new.replace(b'return not env.scene.bad',b'return True'),
+                        new.replace(b'def _load_batch():\n    return True',b'def _load_batch():\n    return False')]:
+            with self.assertRaises(ValueError):c._verify_prefix_controller_compatibility(old,changed)
+
+    def test_chained_gate_rejects_changed_native_asset_even_with_self_consistent_source_hashes(self):
+        _,payload,_,_,_=self.chain_fixture()
+        payload['source_files_sha256']['native/model.xml']='a'*64
+        for role in ('prefix','suffix'):
+            record=payload['continuation_chain'][role];file=self.path/record['source_manifest_path'];manifest=json.loads(file.read_text())
+            manifest['source_files_sha256']['native/model.xml']=('b' if role=='prefix' else 'a')*64
+            manifest['source_version']='sha256:'+hashlib.sha256(json.dumps(manifest['source_files_sha256'],sort_keys=True).encode()).hexdigest()
+            file.write_text(json.dumps(manifest));record['source_manifest_sha256']=hashlib.sha256(file.read_bytes()).hexdigest()
+        with patch.object(c,'ROOT',self.path),self.assertRaisesRegex(ValueError,'identical physics'):
+            c._validate_continuation_chain(payload)
+
+    def test_chained_gate_rejects_incomplete_native_final_state_even_with_updated_snapshot_hash(self):
+        import numpy as np
+        path,payload,source,_,_=self.chain_fixture()
+        record=payload['continuation_chain']['suffix'];file=self.path/record['output_snapshot_path']
+        with np.load(file) as saved:arrays={key:saved[key].copy() for key in saved.files}
+        arrays['integration_state']=arrays['integration_state'][:-1]
+        np.savez(file,**arrays);record['output_snapshot_sha256']=hashlib.sha256(file.read_bytes()).hexdigest();path.write_text(json.dumps(payload))
+        result_path=self.path/record['outcome_path'];result=json.loads(result_path.read_text());result['checkpoint_sha256'][file.name]=record['output_snapshot_sha256']
+        result_path.write_text(json.dumps(result));record['outcome_sha256']=hashlib.sha256(result_path.read_bytes()).hexdigest();path.write_text(json.dumps(payload))
+        with patch.object(c,'ROOT',self.path),patch.object(c,'_source_identity',return_value=source),self.assertRaisesRegex(ValueError,'snapshot is incomplete'):
+            c.validate_stage_validation(path)
+
+    def test_chained_gate_rejects_missing_or_backdated_effective_model_capture(self):
+        path,payload,source,_,_=self.chain_fixture()
+        record=payload['continuation_chain']['prefix'];file=self.path/record['effective_physics_path'];original=json.loads(file.read_text())
+        variants=[{**original,'capture_scope':'reconstructed_after_execution'},
+                  {**original,'excluded_model_fields':['geom_rgba','geom_friction']},
+                  {**original,'captures':{k:v for k,v in original['captures'].items() if k!='effective_final'}}]
+        with patch.object(c,'ROOT',self.path),patch.object(c,'_source_identity',return_value=source):
+            for value in variants:
+                file.write_text(json.dumps(value));record['effective_physics_sha256']=hashlib.sha256(file.read_bytes()).hexdigest()
+                outcome_file=self.path/record['outcome_path'];outcome=json.loads(outcome_file.read_text());outcome['effective_physics_sha256']=record['effective_physics_sha256']
+                outcome_file.write_text(json.dumps(outcome));record['outcome_sha256']=hashlib.sha256(outcome_file.read_bytes()).hexdigest();path.write_text(json.dumps(payload))
+                with self.assertRaises(ValueError):c.validate_stage_validation(path)
+
+    def test_runtime_probe_override_rejected_despite_updated_probe_and_source_manifest_hashes(self):
+        path,payload,source,_,_=self.chain_fixture()
+        record=payload['continuation_chain']['suffix'];probe=self.path/record['probe_path']
+        probe.write_text('env.model.opt.impratio = 10\n');record['probe_sha256']=hashlib.sha256(probe.read_bytes()).hexdigest()
+        manifest_file=self.path/record['source_manifest_path'];manifest=json.loads(manifest_file.read_text());manifest['probe_sha256']=record['probe_sha256']
+        manifest_file.write_text(json.dumps(manifest));record['source_manifest_sha256']=hashlib.sha256(manifest_file.read_bytes()).hexdigest()
+        physics_file=self.path/record['effective_physics_path'];physics=json.loads(physics_file.read_text());physics['probe_sha256']=record['probe_sha256']
+        for name in ('effective_initial','effective_final'):
+            capture=physics['captures'][name];file=self.path/capture['model_path'];file.write_bytes(b'unit-test compiled native model: impratio=10');capture['model_sha256']=hashlib.sha256(file.read_bytes()).hexdigest()
+        physics_file.write_text(json.dumps(physics));record['effective_physics_sha256']=hashlib.sha256(physics_file.read_bytes()).hexdigest()
+        outcome_file=self.path/record['outcome_path'];outcome=json.loads(outcome_file.read_text());outcome['effective_physics_sha256']=record['effective_physics_sha256']
+        outcome_file.write_text(json.dumps(outcome));record['outcome_sha256']=hashlib.sha256(outcome_file.read_bytes()).hexdigest();path.write_text(json.dumps(payload))
+        with patch.object(c,'ROOT',self.path),patch.object(c,'_source_identity',return_value=source),self.assertRaisesRegex(ValueError,'Runtime physics/model'):
+            c.validate_stage_validation(path)
+
+    def test_runtime_pour_helper_override_rejected_despite_compatible_prefix_ast_and_updated_source(self):
+        import tarfile
+        path,payload,_,old,new=self.chain_fixture()
+        new+=b'\ndef _tilt_complete_batch(env):\n    env.model.opt.impratio = 10\n'
+        c._verify_prefix_controller_compatibility(old,new)  # The mutation is after the saved prefix cut.
+        source_name='scripts/collect_granular_demos.py';(self.path/source_name).write_bytes(new)
+        hashes={source_name:hashlib.sha256(new).hexdigest()};version='sha256:'+hashlib.sha256(json.dumps(hashes,sort_keys=True).encode()).hexdigest()
+        payload.update(source_version=version,source_files_sha256=hashes)
+        record=payload['continuation_chain']['suffix'];manifest_file=self.path/record['source_manifest_path'];manifest=json.loads(manifest_file.read_text())
+        manifest.update(source_version=version,source_files_sha256=hashes);manifest_file.write_text(json.dumps(manifest));record['source_manifest_sha256']=hashlib.sha256(manifest_file.read_bytes()).hexdigest()
+        archive=self.path/record['source_archive_path']
+        with tarfile.open(archive,'w:gz') as t:
+            entry=tarfile.TarInfo(source_name);entry.size=len(new);t.addfile(entry,io.BytesIO(new))
+        record['source_archive_sha256']=hashlib.sha256(archive.read_bytes()).hexdigest()
+        physics_file=self.path/record['effective_physics_path'];physics=json.loads(physics_file.read_text());physics['source_version']=version
+        capture=physics['captures']['effective_final'];file=self.path/capture['model_path'];file.write_bytes(b'unit-test compiled native model: impratio=10');capture['model_sha256']=hashlib.sha256(file.read_bytes()).hexdigest()
+        physics_file.write_text(json.dumps(physics));record['effective_physics_sha256']=hashlib.sha256(physics_file.read_bytes()).hexdigest()
+        outcome_file=self.path/record['outcome_path'];outcome=json.loads(outcome_file.read_text());outcome.update(source_version=version,effective_physics_sha256=record['effective_physics_sha256'])
+        outcome_file.write_text(json.dumps(outcome));record['outcome_sha256']=hashlib.sha256(outcome_file.read_bytes()).hexdigest();path.write_text(json.dumps(payload))
+        with patch.object(c,'ROOT',self.path),patch.object(c,'_source_identity',return_value=(version,hashes)),self.assertRaisesRegex(ValueError,'Runtime physics/model'):
+            c.validate_stage_validation(path)
+
+    def test_settled_checkpoint_time_must_match_bound_executed_stage(self):
+        path,payload,source,_,_=self.chain_fixture()
+        record=payload['continuation_chain']['suffix'];file=self.path/record['outcome_path'];outcome=json.loads(file.read_text())
+        outcome['stages'][0]['sim_seconds']=20.
+        file.write_text(json.dumps(outcome));record['outcome_sha256']=hashlib.sha256(file.read_bytes()).hexdigest();path.write_text(json.dumps(payload))
+        with patch.object(c,'ROOT',self.path),patch.object(c,'_source_identity',return_value=source),self.assertRaisesRegex(ValueError,'snapshot is incomplete'):
+            c.validate_stage_validation(path)
+
+    def loaded_transfer_fixture(self):
+        path,payload,source,_,_=self.chain_fixture()
+        chain=payload.pop('continuation_chain');payload.pop('initial_state_provenance');payload.pop('motivation');payload.pop('stage_summary')
+        payload.update(scope='saved_state_loaded_transfer_feasibility_v1',historical_prefix_validated=False,
+                       accepted_demo_count=0,correction_passed=False,lift_passed=False)
+        record=chain['suffix'];record.update(boundary_audit_path=chain['boundary_audit_path'],boundary_audit_sha256=chain['boundary_audit_sha256'])
+        payload['transfer_segment']=record
+        file=self.path/record['outcome_path'];outcome=json.loads(file.read_text())
+        outcome.update(source_g=3.84,physics_checks=90000,
+            stages=[dict(stage='initial',sim_seconds=0.,failure=None,source_g=3.84,tool_g=.16,receiver_g=0.,inflight_g=0.,spill_g=0.),
+                    dict(stage='post_pour_settled',sim_seconds=21.7,failure=None,source_g=3.84,tool_g=0.,receiver_g=.16,inflight_g=0.,spill_g=0.)],
+            expert_trace=[dict(phase=p) for p in ('receiver_transit','pre_pour_guard','complete_pour','drain_hold','return_upright','receiver_retract')])
+        file.write_text(json.dumps(outcome));record['outcome_sha256']=hashlib.sha256(file.read_bytes()).hexdigest();path.write_text(json.dumps(payload))
+        return path,payload,source
+
+    def test_loaded_transfer_accepts_only_forward_scope_without_a_historical_prefix_claim(self):
+        path,payload,source=self.loaded_transfer_fixture()
+        with patch.object(c,'ROOT',self.path),patch.object(c,'_source_identity',return_value=source):
+            gate=c.validate_stage_validation(path)
+        self.assertEqual(gate['kind'],'saved_state_loaded_transfer_feasibility_v1')
+        self.assertFalse(gate['historical_prefix_validated'])
+        self.assertFalse(gate['full_episode_accepted'])
+        self.assertFalse(gate['candidate_data_eligible'])
+        self.assertEqual(gate['accepted_demo_count'],0)
+        self.assertEqual(gate['stage_summary']['physics_checks_scope'],'forward_segment_only')
+        self.assertNotIn('initial_state_provenance',gate)
+        self.assertNotIn('continuation_chain',gate)
+
+    def test_loaded_transfer_rejects_missing_evidence_prefix_claim_or_changed_physics(self):
+        import copy
+        path,payload,source=self.loaded_transfer_fixture()
+        changes=[('historical_prefix_validated',True),('accepted_demo_count',1),('correction_passed',True),
+                 ('lift_passed',True),('full_episode_accepted',True),('candidate_data_eligible',True),('stage_physical_valid',False)]
+        with patch.object(c,'ROOT',self.path),patch.object(c,'_source_identity',return_value=source):
+            for key,value in changes:
+                path.write_text(json.dumps({**payload,key:value}))
+                with self.assertRaises(ValueError):c.validate_stage_validation(path)
+            bad=copy.deepcopy(payload);bad['transfer_segment'].pop('effective_physics_sha256');path.write_text(json.dumps(bad))
+            with self.assertRaises(ValueError):c.validate_stage_validation(path)
+            record=payload['transfer_segment'];file=self.path/record['effective_physics_path'];physics=json.loads(file.read_text())
+            capture=physics['captures']['effective_initial'];model=self.path/capture['model_path'];model.write_bytes(b'unit-test changed impratio=10')
+            capture['model_sha256']=hashlib.sha256(model.read_bytes()).hexdigest();file.write_text(json.dumps(physics));record['effective_physics_sha256']=hashlib.sha256(file.read_bytes()).hexdigest()
+            result_file=self.path/record['outcome_path'];outcome=json.loads(result_file.read_text());outcome['effective_physics_sha256']=record['effective_physics_sha256']
+            result_file.write_text(json.dumps(outcome));record['outcome_sha256']=hashlib.sha256(result_file.read_bytes()).hexdigest();path.write_text(json.dumps(payload))
+            with self.assertRaisesRegex(ValueError,'Runtime physics/model'):c.validate_stage_validation(path)
+
+    def test_loaded_transfer_rejects_bad_native_state_or_nonempty_initial_receiver(self):
+        path,payload,source=self.loaded_transfer_fixture();record=payload['transfer_segment']
+        file=self.path/record['boundary_audit_path'];original=json.loads(file.read_text())
+        with patch.object(c,'ROOT',self.path),patch.object(c,'_source_identity',return_value=source):
+            for key,value in [('integration_state_size_valid',False),('snapshot_redundant_fields_match_integration_state',False),
+                              ('normalized_model_sha256','a'*64),('receiver_g',.02),('spilled_g',.02),('inflight_g',.02),('tool_g',.04)]:
+                file.write_text(json.dumps({**original,key:value}));record['boundary_audit_sha256']=hashlib.sha256(file.read_bytes()).hexdigest();path.write_text(json.dumps(payload))
+                with self.assertRaises(ValueError):c.validate_stage_validation(path)
+
+    def test_loaded_transfer_rejects_spill_incomplete_drain_force_and_unchecked_substeps(self):
+        path,payload,source=self.loaded_transfer_fixture();record=payload['transfer_segment']
+        file=self.path/record['outcome_path'];original=json.loads(file.read_text())
+        cases=[('spilled_g',.02),('tool_g',.02),('inflight_g',.02),('raw_net_mass_g',.1),('mass_g',.06),
+               ('settled',False),('failure','forbidden contact'),('physics_checks',100),('max_grain_contact_penetration_m',.000656),
+               ('max_contact_penetration_m',.0011),('no_state_writes_after_initialization',False),
+               ('expert_trace',[row for row in original['expert_trace'] if row['phase']!='receiver_retract'])]
+        with patch.object(c,'ROOT',self.path),patch.object(c,'_source_identity',return_value=source):
+            for key,value in cases:
+                with self.subTest(key=key):
+                    file.write_text(json.dumps({**original,key:value}));record['outcome_sha256']=hashlib.sha256(file.read_bytes()).hexdigest();path.write_text(json.dumps(payload))
+                    with self.assertRaises(ValueError):c.validate_stage_validation(path)
+
+    def test_loaded_transfer_candidates_start_from_reset_and_never_reuse_stage_data(self):
+        path,payload,source=self.loaded_transfer_fixture()
+        with patch.object(c,'ROOT',self.path),patch.object(c,'_source_identity',return_value=source), \
+                patch.object(t,'verify_workspace'),patch.object(c,'_run_batch') as run:
+            c.candidate_batch('transfer-candidates',str(path))
+        jobs=run.call_args.args[1];gate=run.call_args.args[2]
+        self.assertEqual(len(jobs),30);self.assertTrue(all(job['status']=='planned' for job in jobs))
+        self.assertEqual(gate['accepted_demo_count'],0);self.assertTrue(run.call_args.kwargs['candidate_mode'])
+        with self.assertRaises(TypeError):c.candidate_batch('transfer-candidates',str(path),reuse_reference=True)
+        with self.assertRaises(ValueError):c._run_batch('illegal',jobs,gate,30,360,120,overlap_waves=True,candidate_mode=True,reused={'accepted':True})
+
     def test_candidate_submits_all_30_from_reset_with_no_reference_or_stage_reuse(self):
         gate = dict(kind='saved_state_corrective_continuation', source_version='sha256:new', full_episode_accepted=False)
         spawner = FakeSpawner()

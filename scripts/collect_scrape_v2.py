@@ -219,7 +219,9 @@ def _approach_strict(demo, env):
     here, here_r = demo.session.arms["left"].tool_pose()
     pinch = origin + np.array([0.0, 0.0, 0.035])
     face = legacy._from_side("left")
-    outside = origin + np.array([-0.096, 0.0, 0.080])
+    # 20 mm higher than the pose that put the left wrist 0.05 mm into the bench
+    # under NoSlip3 (run 053, board_neg_x). The pinch height is unchanged.
+    outside = origin + np.array([-0.096, 0.0, 0.100])
     if not demo.go("left", here + np.array([0.0, 0.0, 0.10]), here_r):
         return None, None
     # Clear the empty hand farther above the vial before turning. The earlier

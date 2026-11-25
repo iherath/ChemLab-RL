@@ -357,6 +357,394 @@ def _validate_initial_state_provenance(payload):
             "motivation": {**motivation, "result_path": str(motivation_path), "source_version": failed.get("source_version")}}
 
 
+def _verify_prefix_controller_compatibility(old_source, new_source):
+    """Prove this specific refactor leaves every successful old prefix unchanged.
+
+    This is deliberately structural rather than a general equivalence claim.
+    Unknown controller edits fail closed and require a newly executed prefix.
+    """
+    import ast
+    import copy
+
+    def dump(node):
+        return ast.dump(node, include_attributes=False)
+
+    old, new = ast.parse(old_source), ast.parse(new_source)
+    allowed_functions = {"_move_cup", "_pour_complete_batch", "_tilt_complete_batch"}
+    allowed_constants = {"EXPERT_CONTROLLER", "POUR_ANGLE_DEG", "POUR_PIVOT_HEIGHT_M"}
+
+    def unchanged_nodes(tree):
+        return [dump(node) for node in tree.body
+                if not (isinstance(node, ast.FunctionDef) and node.name in allowed_functions)
+                and not (isinstance(node, ast.Assign) and len(node.targets) == 1
+                         and isinstance(node.targets[0], ast.Name) and node.targets[0].id in allowed_constants)]
+
+    if unchanged_nodes(old) != unchanged_nodes(new):
+        raise ValueError("Chained prefix requires all non-pour controller behavior to remain unchanged")
+    functions = [{n.name: n for n in tree.body if isinstance(n, ast.FunctionDef)} for tree in (old, new)]
+    if "_move_cup" not in functions[0] or "_move_cup" not in functions[1] or "_load_batch" not in functions[0]:
+        raise ValueError("Missing production prefix controller functions")
+    original, current = functions[0]["_move_cup"], functions[1]["_move_cup"]
+    if dump(original) == dump(current):
+        return "identical_prefix_controller"
+    expected = copy.deepcopy(original)
+    try:
+        index = next(i for i, n in enumerate(expected.body) if isinstance(n, ast.For))
+        loop = expected.body[index]
+        split = next(i for i, n in enumerate(loop.body)
+                     if isinstance(n, ast.Assign) and len(n.targets) == 1
+                     and isinstance(n.targets[0], ast.Name) and n.targets[0].id == "rot")
+        if dump(loop.body[split]) != dump(ast.parse("rot = mat.reshape(3, 3)").body[0]):
+            raise ValueError("Unexpected prefix interpolation")
+        if dump(loop.body[-1]) != dump(ast.parse("if env.scene.bad:\n    return False").body[0]):
+            raise ValueError("Unexpected prefix failure guard")
+        helper = ast.parse("def command_pose(tip, rot):\n    pass").body[0]
+        helper.body = loop.body[split + 1:-1] + ast.parse("return not env.scene.bad").body
+        loop.body = loop.body[:split] + ast.parse("if not command_pose(tip, mat.reshape(3, 3)):\n    return False").body
+        tail = expected.body[index + 1:]
+        guard = ast.parse('if error > 0.004:\n    env.scene.bad = f"scoop tracking error {error * 1000:.2f} mm"\n    return False\nreturn True').body
+        if [dump(n) for n in tail[1:]] != [dump(n) for n in guard]:
+            raise ValueError("Old successful prefix does not prove the unchanged 4 mm endpoint guard")
+        retry = ast.parse("if error > 0.004:\n    for _ in range(5):\n        if not command_pose(target, rotation):\n            return False\n        error = float(np.linalg.norm(legacy._tip(env.data) - target))\n        if error <= 0.001:\n            break").body
+        expected.body = expected.body[:index] + [helper, loop, tail[0]] + retry + tail[1:]
+    except (StopIteration, IndexError) as error:
+        raise ValueError("Unrecognized prefix servo structure") from error
+    if dump(expected) != dump(current):
+        raise ValueError("Shared servo change is not the verified normal-path refactor with inactive prefix correction")
+    return "normal_path_ast_equal_old_success_implies_retry_inactive"
+
+
+def _validate_effective_physics(raw, record, manifest, outcome):
+    """Compare actual runtime MJB captures, not inferred historical settings.
+
+    MuJoCo serializes the compiled model including its physics options. Only
+    geom_rgba is normalized on a copy because scene.show changes display alpha.
+    Initial/final captures detect persistent probe/helper overrides; they are
+    bounded audit evidence, not a sandbox against arbitrary transient Python.
+    """
+    evidence = json.loads(raw)
+    if (evidence.get("schema_version") != 1 or evidence.get("capture_scope") != "actual_segment_runtime"
+            or evidence.get("serialization") != "mujoco_mjb_copy_zero_geom_rgba_v1"
+            or evidence.get("excluded_model_fields") != ["geom_rgba"]
+            or evidence.get("mujoco_version") != "3.16.0"
+            or evidence.get("source_version") != manifest["source_version"]
+            or evidence.get("probe_sha256") != record["probe_sha256"]
+            or outcome.get("effective_physics_sha256") != record["effective_physics_sha256"]):
+        raise ValueError("Segment needs actual source-bound runtime model captures with only visual-color normalization")
+    phases = {"expected_production": "fresh_production_before_overrides",
+              "effective_initial": "after_initialization_and_overrides_before_first_step",
+              "effective_final": "after_last_step_before_cleanup"}
+    captures = evidence.get("captures")
+    if not isinstance(captures, dict) or set(captures) != set(phases):
+        raise ValueError("Missing expected, initial or final effective physics capture")
+    models = {}
+    for name, phase in phases.items():
+        capture = captures[name]
+        if not isinstance(capture, dict) or capture.get("capture_phase") != phase:
+            raise ValueError("Model must be captured at its actual declared execution phase")
+        path, content = _checked_repo_file(capture.get("model_path"), capture.get("model_sha256"), name + " effective model")
+        if not content or path.suffix != ".mjb":
+            raise ValueError("Effective physics capture must preserve the serialized native model")
+        models[name] = content
+    if any(content != models["expected_production"] for content in models.values()):
+        raise ValueError("Runtime physics/model parameters differ from the expected production model")
+    return captures["expected_production"]["model_sha256"]
+
+
+def _validate_continuation_chain(payload):
+    """Validate two saved-state segments without promoting either to episode data."""
+    import io
+    import tarfile
+    import numpy as np
+
+    chain = payload.get("continuation_chain")
+    if not isinstance(chain, dict) or chain.get("schema_version") != 1:
+        raise ValueError("Missing versioned continuation chain")
+    current_hashes = payload["source_files_sha256"]
+    segments = {}
+    for role in ("prefix", "suffix"):
+        record = chain.get(role)
+        if not isinstance(record, dict):
+            raise ValueError("Continuation chain must contain prefix and suffix records")
+        files = {key: _checked_repo_file(record.get(key + "_path"), record.get(key + "_sha256"), role + " " + key)
+                 for key in ("source_manifest", "source_archive", "probe", "outcome", "input_snapshot", "output_snapshot", "effective_physics")}
+        manifest = json.loads(files["source_manifest"][1])
+        hashes = manifest.get("source_files_sha256")
+        if (not isinstance(hashes, dict) or set(hashes) != set(current_hashes)
+                or manifest.get("source_version") != "sha256:" + hashlib.sha256(json.dumps(hashes, sort_keys=True).encode()).hexdigest()
+                or manifest.get("probe_sha256") != record["probe_sha256"]):
+            raise ValueError("Segment source/probe manifest is incomplete or inconsistent")
+        changed = {name for name in hashes if hashes[name] != current_hashes[name]}
+        if changed - {"scripts/collect_granular_demos.py"}:
+            raise ValueError("Chained segments must share identical physics, assets, pickup and native dependencies")
+        if role == "suffix" and hashes != current_hashes:
+            raise ValueError("Final continuation must execute the current complete source manifest")
+        archived = {}
+        with tarfile.open(fileobj=io.BytesIO(files["source_archive"][1]), mode="r:gz") as archive:
+            for member in archive.getmembers():
+                if (not member.isfile() or member.name in archived or member.name not in hashes
+                        or not member.name.endswith(".py") or member.size > 4 * 1024 * 1024):
+                    raise ValueError("Source archive contains duplicate, unsupported or untracked entries")
+                content = archive.extractfile(member).read()
+                if hashlib.sha256(content).hexdigest() != hashes[member.name]:
+                    raise ValueError("Archived source differs from the executed source manifest")
+                archived[member.name] = content
+        if set(archived) != {name for name in hashes if name.endswith(".py")}:
+            raise ValueError("Source archive must preserve every covered Python file")
+        outcome = json.loads(files["outcome"][1])
+        if (outcome.get("source_version") != manifest["source_version"]
+                or outcome.get("snapshot_sha256") != record["input_snapshot_sha256"]
+                or outcome.get("snapshot_unchanged") is not True
+                or outcome.get("no_state_writes_after_initialization") is not True
+                or outcome.get("initialization_contact_model_override") is not None
+                or any(outcome.get(key) != payload.get(key) for key in ("grain_count", "powder_id", "seed", "target_g"))
+                or outcome.get("physical_validation_scope") != "rigid_bodies_and_grains"
+                or outcome.get("powder_dynamics") != "physical_grains_v1"):
+            raise ValueError("Segment outcome does not match its executed source, input state or physical scope")
+        model_sha = _validate_effective_physics(files["effective_physics"][1], record, manifest, outcome)
+        if outcome.get("checkpoint_sha256", {}).get(files["output_snapshot"][0].name) != record["output_snapshot_sha256"]:
+            raise ValueError("Executed segment does not bind its selected output checkpoint")
+        for key in ("physics_checks", "grain_radius_m", "grain_mass_g", "timestep_s", "max_contact_penetration_m",
+                    "max_grain_contact_penetration_m", "conservation_error_g", "total_mass_g"):
+            if type(outcome.get(key)) not in (int, float) or not math.isfinite(outcome[key]):
+                raise ValueError("Segment lacks finite cumulative physical evidence")
+        if (type(outcome["physics_checks"]) is not int or outcome["physics_checks"] <= 0
+                or outcome["grain_radius_m"] <= 0 or outcome["grain_mass_g"] <= 0 or outcome["timestep_s"] != .00025
+                or outcome.get("physics_validation") != "rigid_contact_v1"
+                or not 0 <= outcome["max_contact_penetration_m"] <= .001 + 1e-12
+                or not 0 <= outcome["max_grain_contact_penetration_m"] <= .2 * outcome["grain_radius_m"] + 1e-12
+                or abs(outcome["conservation_error_g"]) > 1e-8):
+            raise ValueError("Segment cumulative contact or conservation audit failed")
+        segments[role] = dict(record=record, files=files, manifest=manifest, outcome=outcome, archived=archived, model_sha=model_sha)
+    prefix, suffix = segments["prefix"], segments["suffix"]
+    if prefix["model_sha"] != suffix["model_sha"]:
+        raise ValueError("Chained segments used different effective native physics models")
+    p, s = prefix["outcome"], suffix["outcome"]
+    initial_sha = payload["initial_state_provenance"]["snapshot_sha256"]
+    boundary_sha = prefix["record"]["output_snapshot_sha256"]
+    if (prefix["record"]["input_snapshot_sha256"] != initial_sha
+            or boundary_sha != suffix["record"]["input_snapshot_sha256"]
+            or prefix["files"]["output_snapshot"][1] != suffix["files"]["input_snapshot"][1]):
+        raise ValueError("Continuation segments are not connected by the exact initial and boundary state bytes")
+    if (p.get("variant") != "pickup_suffix" or p.get("correction_passed") is not True
+            or p.get("lift_passed") is not True or p.get("pour_passed") is not False
+            or p.get("continuation_passed") is not False or p.get("physical_valid") is not False
+            or not str(p.get("failure", "")).startswith("scoop IK miss ")):
+        raise ValueError("Prefix must retain its original later IK failure and verified loading/lift scope")
+    stages = p.get("stages", [])
+    indices = [i for i, row in enumerate(stages) if row.get("stage") == "loaded_and_lifted"]
+    if len(indices) != 1:
+        raise ValueError("Prefix needs one unambiguous loaded-and-lifted cut")
+    index = indices[0]
+    cut = stages[index]
+    if (any(type(cut.get(key)) not in (int, float) or not math.isfinite(cut[key])
+            for key in ("source_g", "tool_g", "receiver_g", "inflight_g", "spill_g", "sim_seconds"))
+            or any(row.get("failure") for row in stages[:index + 1])
+            or not any(row.get("failure") == p["failure"] for row in stages[index + 1:])
+            or cut.get("failure") or cut.get("receiver_g") != 0 or cut.get("inflight_g") != 0
+            or cut.get("spill_g") != 0 or not isinstance(cut.get("tool_g"), (int, float)) or cut["tool_g"] <= .05):
+        raise ValueError("Prefix failure precedes its cut or its retained batch is not physically valid")
+    trace = p.get("expert_trace", [])
+    retained = [row for row in trace if row.get("phase") == "retained_batch" and row.get("batch_fits") is True]
+    with np.load(prefix["files"]["output_snapshot"][0], allow_pickle=False) as state:
+        required = {"qpos", "qvel", "ctrl", "qacc_warmstart", "integration_state", "integration_state_spec",
+                    "time", "q_cmd_left", "q_cmd_right", "grip_cmd_left", "grip_cmd_right"}
+        if (not required <= set(state.files) or any(not np.isfinite(state[key]).all() for key in required)
+                or state["ctrl"].shape != (14,) or state["q_cmd_left"].shape != (6,) or state["q_cmd_right"].shape != (6,)
+                or int(state["integration_state_spec"]) != 16383):
+            raise ValueError("Boundary must contain finite complete integration and controller state")
+        boundary_time = float(state["time"])
+        boundary_shapes = {key: state[key].shape for key in required}
+    with np.load(prefix["files"]["input_snapshot"][0], allow_pickle=False) as state:
+        if "time" not in state or not math.isfinite(float(state["time"])) or abs(boundary_time - float(state["time"]) - cut["sim_seconds"]) > 1e-8:
+            raise ValueError("Prefix cut time differs from its recorded integration-state interval")
+        if any(state[key].shape != boundary_shapes[key] for key in ("qpos", "qvel", "ctrl")):
+            raise ValueError("Boundary state dimensions differ from the preserved native model")
+    matching = [row for row in retained if abs(row.get("sim_seconds", -1) - boundary_time) <= 1e-9]
+    if len(matching) != 1 or abs(matching[0]["tool_g"] - cut["tool_g"]) > 1e-9:
+        raise ValueError("Boundary snapshot is not the physically accepted retained-batch endpoint")
+    depths = [row for row in trace if row.get("phase") == "depth_check"
+              and row.get("sim_seconds", math.inf) < boundary_time
+              and abs(row.get("z_error_m", math.inf)) <= .00025
+              and 0 <= row.get("lateral_error_m", math.inf) <= .001]
+    if not depths:
+        raise ValueError("Prefix has no executed depth check within unchanged production tolerances")
+    depth = depths[-1]
+    compatibility = _verify_prefix_controller_compatibility(
+        prefix["archived"]["scripts/collect_granular_demos.py"], suffix["archived"]["scripts/collect_granular_demos.py"])
+    audit_path, audit_raw = _checked_repo_file(chain.get("boundary_audit_path"), chain.get("boundary_audit_sha256"), "boundary audit")
+    audit = json.loads(audit_raw)
+    booleans = ("integration_state_restored_exactly", "controller_state_restored_exactly", "finite_state", "source_held",
+                "right_tool_held", "receiver_empty_before_tare", "integration_state_size_valid",
+                "snapshot_redundant_fields_match_integration_state")
+    if (audit.get("snapshot_sha256") != boundary_sha or audit.get("source_version") != payload["source_version"]
+            or audit.get("normalized_model_sha256") != suffix["model_sha"]
+            or any(audit.get(key) is not True for key in booleans)):
+        raise ValueError("Boundary restore, grasp or empty-receiver tare audit failed")
+    for key, expected in (("source_g", cut["source_g"]), ("tool_g", cut["tool_g"]), ("receiver_g", 0.),
+                          ("inflight_g", 0.), ("spilled_g", 0.), ("total_mass_g", p["total_mass_g"]), ("conservation_error_g", 0.)):
+        if type(audit.get(key)) not in (int, float) or not math.isfinite(audit[key]) or abs(audit[key] - expected) > 1e-8:
+            raise ValueError("Boundary audit does not preserve the physical retained inventory")
+    if (any(s[key] != p[key] for key in ("grain_radius_m", "grain_mass_g", "timestep_s"))
+            or s.get("variant") != "receiver_transit_suffix" or s.get("continuation_passed") is not True
+            or s.get("physical_valid") is not True or s.get("pour_passed") is not True or s.get("failure")
+            or s.get("settled") is not True or s.get("mass_force_agreement") is not True
+            or any(type(s.get(key)) not in (int, float) or not math.isfinite(s[key])
+                   for key in ("tool_g", "inflight_g", "spilled_g", "mass_g", "raw_net_mass_g", "total_mass_g"))
+            or any(abs(s[key]) > 1e-12 for key in ("tool_g", "inflight_g", "spilled_g"))
+            or abs(s["mass_g"] - cut["tool_g"]) > 1e-8
+            or abs(s["total_mass_g"] - p["total_mass_g"]) > 1e-8
+            or abs(s["raw_net_mass_g"] - s["mass_g"]) > .01 + 1e-12):
+        raise ValueError("Current suffix did not completely drain the retained batch with settled independent force agreement")
+    settled_stages = [row for row in s.get("stages", []) if row.get("stage") == "post_pour_settled" and not row.get("failure")]
+    if (len(settled_stages) != 1 or type(settled_stages[0].get("sim_seconds")) not in (int, float)
+            or not math.isfinite(settled_stages[0]["sim_seconds"]) or settled_stages[0]["sim_seconds"] <= 0):
+        raise ValueError("Missing successful post-pour settled endpoint")
+    if suffix["files"]["output_snapshot"][0].name != "post_pour_settled.npz":
+        raise ValueError("Suffix output must be the complete post-pour integration/controller snapshot")
+    with np.load(suffix["files"]["output_snapshot"][0], allow_pickle=False) as state:
+        if (not required <= set(state.files) or any(not np.isfinite(state[key]).all() for key in required)
+                or any(state[key].shape != boundary_shapes[key] for key in required)
+                or int(state["integration_state_spec"]) != 16383
+                or abs(float(state["time"]) - boundary_time - settled_stages[0]["sim_seconds"]) > 1e-8):
+            raise ValueError("Final settled snapshot is incomplete, nonfinite or precedes the chain boundary")
+    summary = payload["stage_summary"]
+    derived = dict(physics_checks=p["physics_checks"] + s["physics_checks"],
+                   grain_radius_m=s["grain_radius_m"], max_grain_contact_penetration_m=max(p["max_grain_contact_penetration_m"], s["max_grain_contact_penetration_m"]),
+                   conservation_error_g=max(abs(p["conservation_error_g"]), abs(s["conservation_error_g"])),
+                   spilled_g=s["spilled_g"], transferred_g=s["mass_g"], mass_g=s["mass_g"], raw_net_mass_g=s["raw_net_mass_g"],
+                   depth_error_m=depth["z_error_m"], lateral_error_m=depth["lateral_error_m"])
+    if (summary.get("physics_checks_scope") != "prefix_run_including_excluded_tail_plus_suffix_upper_bound"
+            or any(type(summary.get(key)) not in (int, float) or not math.isfinite(summary[key])
+                   or abs(summary[key] - value) > 1e-12 for key, value in derived.items())):
+        raise ValueError("Chain summary must derive from immutable evidence and explicitly label cumulative upper bounds")
+    return dict(schema_version=1, prefix=prefix["record"], suffix=suffix["record"],
+                boundary_audit_path=str(audit_path), boundary_audit_sha256=chain["boundary_audit_sha256"],
+                prefix_cut="loaded_and_lifted", prefix_later_failure_preserved=p["failure"],
+                source_compatibility=compatibility, physics_checks_scope=summary["physics_checks_scope"])
+
+
+def _validate_loaded_transfer_feasibility(payload, path, raw):
+    """Schedule fresh candidates from forward-only evidence; validate no prefix."""
+    import io
+    import tarfile
+    import numpy as np
+    if (payload.get("historical_prefix_validated") is not False
+            or type(payload.get("accepted_demo_count")) is not int or payload["accepted_demo_count"] != 0
+            or payload.get("full_episode_accepted") is not False or payload.get("candidate_data_eligible") is not False
+            or payload.get("stage_physical_valid") is not True or payload.get("grain_count") != 200
+            or payload.get("correction_passed") is True or payload.get("lift_passed") is True
+            or payload.get("failure")):
+        raise ValueError("Loaded transfer feasibility must claim zero accepted episodes and no validated historical prefix")
+    version, hashes = _source_identity()
+    if payload.get("source_version") != version or payload.get("source_files_sha256") != hashes:
+        raise ValueError("Loaded transfer evidence must match the complete current production source")
+    record = payload.get("transfer_segment")
+    if not isinstance(record, dict):
+        raise ValueError("Missing forward transfer segment")
+    files = {key: _checked_repo_file(record.get(key + "_path"), record.get(key + "_sha256"), "transfer " + key)
+             for key in ("source_manifest", "source_archive", "probe", "outcome", "input_snapshot", "output_snapshot", "effective_physics", "boundary_audit")}
+    manifest = json.loads(files["source_manifest"][1])
+    if (manifest.get("source_version") != version or manifest.get("source_files_sha256") != hashes
+            or version != "sha256:" + hashlib.sha256(json.dumps(hashes, sort_keys=True).encode()).hexdigest()
+            or manifest.get("probe_sha256") != record["probe_sha256"]):
+        raise ValueError("Transfer source/probe manifest does not match current production")
+    archived = set()
+    with tarfile.open(fileobj=io.BytesIO(files["source_archive"][1]), mode="r:gz") as archive:
+        for member in archive.getmembers():
+            if (not member.isfile() or member.name in archived or member.name not in hashes
+                    or not member.name.endswith(".py") or member.size > 4 * 1024 * 1024
+                    or hashlib.sha256(archive.extractfile(member).read()).hexdigest() != hashes[member.name]):
+                raise ValueError("Transfer archive differs from the complete executed Python source")
+            archived.add(member.name)
+    if archived != {name for name in hashes if name.endswith(".py")}:
+        raise ValueError("Transfer source archive is incomplete")
+    outcome = json.loads(files["outcome"][1])
+    if (outcome.get("source_version") != version or outcome.get("snapshot_sha256") != record["input_snapshot_sha256"]
+            or outcome.get("snapshot_unchanged") is not True or outcome.get("no_state_writes_after_initialization") is not True
+            or outcome.get("initialization_contact_model_override") is not None
+            or outcome.get("variant") != "receiver_transit_suffix"
+            or outcome.get("physical_validation_scope") != "rigid_bodies_and_grains"
+            or outcome.get("powder_dynamics") != "physical_grains_v1" or outcome.get("physics_validation") != "rigid_contact_v1"
+            or any(outcome.get(key) != payload.get(key) for key in ("grain_count", "powder_id", "seed", "target_g"))
+            or any(outcome.get(key) is not True for key in ("physical_valid", "continuation_passed", "pour_passed", "settled", "mass_force_agreement"))
+            or outcome.get("failure")):
+        raise ValueError("Current ordinary-control transfer has not passed its complete physical and settled-pour audit")
+    model_sha = _validate_effective_physics(files["effective_physics"][1], record, manifest, outcome)
+    audit = json.loads(files["boundary_audit"][1])
+    if (audit.get("source_version") != version or audit.get("snapshot_sha256") != record["input_snapshot_sha256"]
+            or audit.get("normalized_model_sha256") != model_sha
+            or any(audit.get(key) is not True for key in ("integration_state_restored_exactly", "controller_state_restored_exactly",
+                    "integration_state_size_valid", "snapshot_redundant_fields_match_integration_state", "finite_state", "source_held",
+                    "right_tool_held", "receiver_empty_before_tare"))):
+        raise ValueError("Loaded initial state lacks a current native-model restore, grasp and empty-tare audit")
+    initial_keys = ("source_g", "tool_g", "receiver_g", "inflight_g", "spilled_g", "total_mass_g", "conservation_error_g")
+    final_keys = ("source_g", "tool_g", "mass_g", "inflight_g", "spilled_g", "total_mass_g", "conservation_error_g",
+                  "raw_net_mass_g", "physics_checks", "timestep_s", "grain_radius_m", "grain_mass_g", "max_contact_penetration_m", "max_grain_contact_penetration_m")
+    if (any(type(audit.get(key)) not in (int, float) or not math.isfinite(audit[key]) for key in initial_keys)
+            or any(type(outcome.get(key)) not in (int, float) or not math.isfinite(outcome[key]) for key in final_keys)):
+        raise ValueError("Transfer requires finite measured inventory, contact and force evidence")
+    if (audit["source_g"] < 0 or audit["tool_g"] <= .050
+            or any(abs(audit[key]) > 1e-12 for key in ("receiver_g", "inflight_g", "spilled_g"))
+            or abs(audit["source_g"] + audit["tool_g"] - audit["total_mass_g"]) > 1e-8
+            or abs(audit["conservation_error_g"]) > 1e-8
+            or any(abs(outcome[key]) > 1e-12 for key in ("tool_g", "inflight_g", "spilled_g"))
+            or abs(outcome["mass_g"] - audit["tool_g"]) > 1e-8 or abs(outcome["source_g"] - audit["source_g"]) > 1e-8
+            or abs(outcome["total_mass_g"] - audit["total_mass_g"]) > 1e-8
+            or abs(outcome["source_g"] + outcome["mass_g"] - outcome["total_mass_g"]) > 1e-8
+            or abs(outcome["conservation_error_g"]) > 1e-8
+            or abs(outcome["raw_net_mass_g"] - outcome["mass_g"]) > .010 + 1e-12
+            or type(outcome["physics_checks"]) is not int or outcome["physics_checks"] <= 0
+            or outcome["timestep_s"] != .00025 or outcome["grain_radius_m"] <= 0 or outcome["grain_mass_g"] <= 0
+            or abs(outcome["grain_mass_g"] * 200 - outcome["total_mass_g"]) > 1e-8
+            or not 0 <= outcome["max_contact_penetration_m"] <= .001 + 1e-12
+            or not 0 <= outcome["max_grain_contact_penetration_m"] <= .2 * outcome["grain_radius_m"] + 1e-12):
+        raise ValueError("Loaded transfer failed its retained-load, complete drain, conservation, contact or force limits")
+    required = {"qpos", "qvel", "ctrl", "qacc_warmstart", "integration_state", "integration_state_spec",
+                "time", "q_cmd_left", "q_cmd_right", "grip_cmd_left", "grip_cmd_right"}
+    with np.load(files["input_snapshot"][0], allow_pickle=False) as start, np.load(files["output_snapshot"][0], allow_pickle=False) as end:
+        if (any(not required <= set(state.files) for state in (start, end))
+                or any(not np.isfinite(state[key]).all() for state in (start, end) for key in required)
+                or any(start[key].shape != end[key].shape for key in required)
+                or any(int(state["integration_state_spec"]) != 16383 for state in (start, end))
+                or start["ctrl"].shape != (14,) or start["q_cmd_left"].shape != (6,) or start["q_cmd_right"].shape != (6,)):
+            raise ValueError("Transfer endpoint snapshots must preserve complete finite native integration/controller state")
+        start_time, end_time = float(start["time"]), float(end["time"])
+    elapsed = end_time - start_time
+    stages = outcome.get("stages", [])
+    starts = [row for row in stages if row.get("stage") == "initial"]
+    ends = [row for row in stages if row.get("stage") == "post_pour_settled"]
+    if (len(starts) != 1 or len(ends) != 1 or starts[0].get("sim_seconds") != 0
+            or any(row.get("failure") for row in stages)
+            or type(ends[0].get("sim_seconds")) not in (int, float) or not math.isfinite(ends[0]["sim_seconds"])
+            or elapsed <= 0 or abs(elapsed - ends[0]["sim_seconds"]) > 1e-8
+            or outcome["physics_checks"] < math.ceil(elapsed / outcome["timestep_s"] - 1e-5)
+            or files["output_snapshot"][0].name != "post_pour_settled.npz"
+            or outcome.get("checkpoint_sha256", {}).get(files["output_snapshot"][0].name) != record["output_snapshot_sha256"]):
+        raise ValueError("Transfer needs every forward substep checked and a hash/time-bound settled endpoint")
+    phases = [row.get("phase") for row in outcome.get("expert_trace", [])]
+    required_phases = ["receiver_transit", "pre_pour_guard", "complete_pour", "drain_hold", "return_upright", "receiver_retract"]
+    cursor = 0
+    for phase in phases:
+        if cursor < len(required_phases) and phase == required_phases[cursor]:
+            cursor += 1
+    if cursor != len(required_phases):
+        raise ValueError("Forward evidence must execute ordinary receiver transit, full pour, upright return and retraction")
+    for row, expected, mapping in (
+            (starts[0], audit, (("source_g", "source_g"), ("tool_g", "tool_g"), ("receiver_g", "receiver_g"), ("inflight_g", "inflight_g"), ("spill_g", "spilled_g"))),
+            (ends[0], outcome, (("source_g", "source_g"), ("tool_g", "tool_g"), ("receiver_g", "mass_g"), ("inflight_g", "inflight_g"), ("spill_g", "spilled_g")))):
+        if any(type(row.get(key)) not in (int, float) or not math.isfinite(row[key])
+               or abs(row[key] - expected[expected_key]) > 1e-8 for key, expected_key in mapping):
+            raise ValueError("Executed endpoint inventory differs from the loaded audit or final physical result")
+    summary = {key: outcome[key] for key in final_keys}
+    summary.update(transferred_g=outcome["mass_g"], settled=True, elapsed_sim_seconds=elapsed,
+                   physics_checks_scope="forward_segment_only", normalized_model_sha256=model_sha)
+    return dict(kind=payload["scope"], scope=payload["scope"], path=str(path.resolve()), sha256=hashlib.sha256(raw).hexdigest(),
+                source_version=version, source_files_sha256=hashes, transfer_segment=record, stage_summary=summary,
+                historical_prefix_validated=False, accepted_demo_count=0, accepted_demonstrations_from_gate=0,
+                full_episode_accepted=False, candidate_data_eligible=False)
+
+
 def validate_stage_validation(path):
     """Validate a corrective suffix as a launch gate, never as accepted data.
 
@@ -367,7 +755,9 @@ def validate_stage_validation(path):
     path = Path(path)
     raw = path.read_bytes()
     payload = json.loads(raw)
-    if (payload.get("scope") != "saved_state_corrective_continuation"
+    if payload.get("scope") == "saved_state_loaded_transfer_feasibility_v1":
+        return _validate_loaded_transfer_feasibility(payload, path, raw)
+    if (payload.get("scope") not in {"saved_state_corrective_continuation", "saved_state_chained_corrective_continuation_v1"}
             or payload.get("full_episode_accepted") is not False
             or payload.get("candidate_data_eligible") is not False
             or payload.get("stage_physical_valid") is not True
@@ -410,12 +800,13 @@ def validate_stage_validation(path):
             or version != current_version or hashes != current_hashes):
         raise ValueError("Continuation source manifest is incomplete, inconsistent or differs from current production source")
     initial = _validate_initial_state_provenance(payload)
-    return {"kind": "saved_state_corrective_continuation", "scope": payload["scope"],
+    chain = _validate_continuation_chain(payload) if payload["scope"] == "saved_state_chained_corrective_continuation_v1" else None
+    return {"kind": payload["scope"], "scope": payload["scope"],
             "path": str(path.resolve()), "sha256": hashlib.sha256(raw).hexdigest(),
             "source_version": version, "source_files_sha256": hashes,
             "initial_state_provenance": initial, "motivation": initial["motivation"],
             "stage_summary": summary, "full_episode_accepted": False, "candidate_data_eligible": False,
-            "accepted_demonstrations_from_gate": 0}
+            "accepted_demonstrations_from_gate": 0, "continuation_chain": chain}
 
 
 def _reuse_reference(job, reference):
