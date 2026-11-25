@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "run_root": "/runs/vial-qc-bc400k-h100-main-20261122-003",
+  "output": "/runs/vial-qc-bc400k-h100-main-20261122-003/plots",
+  "uncertainty": "Single training seed \u00b7 fixed scene \u00b7 bands: episode-level 95% Wilson CI",
+  "absent_milestones": [
+    200000,
+    400000
+  ],
+  "absent_milestones_meaning": "No complete persisted evaluation at these updates; no trajectory or curve point fabricated",
+  "predeclared_trajectory_seeds": [
+    1001,
+    1002
+  ],
+  "include_failure_when_available": true,
+  "selected_best_mode": "qc",
+  "selected_best_checkpoint": "/__modal/volumes/vo-PIujAnbEJQgpiXPXMNBhIT/vial-qc-bc400k-h100-main-20261122-003/checkpoints/generation_00000010",
+  "final_test_used_for_selection": false,
+  "trajectory_artifacts": [
+    {
+      "role": "baseline",
+      "seed": 1001,
+      "status": "success",
+      "source": "/__modal/volumes/vo-PIujAnbEJQgpiXPXMNBhIT/vial-qc-bc400k-h100-main-20261122-003/evaluations/baseline/seed_1001/trajectory.npz",
+      "prefix": "/runs/vial-qc-bc400k-h100-main-20261122-003/plots/baseline_u000000_seed1001"
+    },
+    {
+      "role": "baseline",
+      "seed": 1002,
+      "status": "success",
+      "source": "/__modal/volumes/vo-PIujAnbEJQgpiXPXMNBhIT/vial-qc-bc400k-h100-main-20261122-003/evaluations/baseline/seed_1002/trajectory.npz",
+      "prefix": "/runs/vial-qc-bc400k-h100-main-20261122-003/plots/baseline_u000000_seed1002"
+    },
+    {
+      "role": "baseline",
+      "seed": 1004,
+      "status": "failure",
+      "source": "/__modal/volumes/vo-PIujAnbEJQgpiXPXMNBhIT/vial-qc-bc400k-h100-main-20261122-003/evaluations/baseline/seed_1004/trajectory.npz",
+      "prefix": "/runs/vial-qc-bc400k-h100-main-20261122-003/plots/baseline_u000000_seed1004"
+    },
+    {
+      "role": "final",
+      "seed": 2001,
+      "status": "success",
+      "source": "/__modal/volumes/vo-PIujAnbEJQgpiXPXMNBhIT/vial-qc-bc400k-h100-main-20261122-003/evaluations/final_test_qc/seed_2001/trajectory.npz",
+      "prefix": "/runs/vial-qc-bc400k-h100-main-20261122-003/plots/final_u175000_seed2001"
+    },
+    {
+      "role": "final",
+      "seed": 2002,
+      "status": "success",
+      "source": "/__modal/volumes/vo-PIujAnbEJQgpiXPXMNBhIT/vial-qc-bc400k-h100-main-20261122-003/evaluations/final_test_qc/seed_2002/trajectory.npz",
+      "prefix": "/runs/vial-qc-bc400k-h100-main-20261122-003/plots/final_u175000_seed2002"
+    },
+    {
+      "role": "best",
+      "seed": 2001,
+      "status": "success",
+      "source": "/__modal/volumes/vo-PIujAnbEJQgpiXPXMNBhIT/vial-qc-bc400k-h100-main-20261122-003/evaluations/final_test_selected/seed_2001/trajectory.npz",
+      "prefix": "/runs/vial-qc-bc400k-h100-main-20261122-003/plots/best_u025000_seed2001"
+    },
+    {
+      "role": "best",
+      "seed": 2002,
+      "status": "success",
+      "source": "/__modal/volumes/vo-PIujAnbEJQgpiXPXMNBhIT/vial-qc-bc400k-h100-main-20261122-003/evaluations/final_test_selected/seed_2002/trajectory.npz",
+      "prefix": "/runs/vial-qc-bc400k-h100-main-20261122-003/plots/best_u025000_seed2002"
+    }
+  ],
+  "input_snapshot": "plot_finalizer/input_snapshot/evaluation_history.json"
+}

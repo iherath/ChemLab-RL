@@ -1,0 +1,9 @@
+{
+  "checkpoint": "/__modal/volumes/vo-PIujAnbEJQgpiXPXMNBhIT/vial-qc-bc400k-h100-main-20261122-003/checkpoints/generation_00000010",
+  "mode": "qc",
+  "selection_successes": 10,
+  "selection_trials": 10,
+  "last_qc_checkpoint": "/__modal/volumes/vo-PIujAnbEJQgpiXPXMNBhIT/vial-qc-bc400k-h100-main-20261122-003/checkpoints/generation_00000066",
+  "original_bc_retained": false,
+  "final_test_used_for_selection": false
+}

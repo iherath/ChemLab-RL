@@ -1,0 +1,311 @@
+{
+  "schema_version": 1,
+  "status": "rendered",
+  "run_id": "vial-qc-bc400k-h100-main-20261122-003",
+  "coordinator_status": "completed",
+  "trigger": "coordinator_terminal",
+  "partial": false,
+  "coordinator_fingerprint": "97c8d908ed20b02bb6df8e0ee7655a8c92d9d0f8c16b162b6d8cfa15b8ac0094",
+  "result_scope": "available_actual_measurements_only",
+  "completion_scope": "completed_training_run",
+  "evaluation_records": 10,
+  "evaluation_trials": 120,
+  "complete_evaluation_records": 10,
+  "measurements_fabricated": false,
+  "final_test_used_for_selection": false,
+  "plot_index": "plots/plot_index.json",
+  "absent_milestones": [
+    200000,
+    400000
+  ],
+  "files": [
+    {
+      "path": "plots/baseline_u000000_seed1001_joint_actions.pdf",
+      "bytes": 122167
+    },
+    {
+      "path": "plots/baseline_u000000_seed1001_joint_actions.png",
+      "bytes": 510809
+    },
+    {
+      "path": "plots/baseline_u000000_seed1001_trajectory.csv",
+      "bytes": 1330970
+    },
+    {
+      "path": "plots/baseline_u000000_seed1001_trajectory.pdf",
+      "bytes": 157784
+    },
+    {
+      "path": "plots/baseline_u000000_seed1001_trajectory.png",
+      "bytes": 370340
+    },
+    {
+      "path": "plots/baseline_u000000_seed1002_joint_actions.pdf",
+      "bytes": 107432
+    },
+    {
+      "path": "plots/baseline_u000000_seed1002_joint_actions.png",
+      "bytes": 509849
+    },
+    {
+      "path": "plots/baseline_u000000_seed1002_trajectory.csv",
+      "bytes": 1206819
+    },
+    {
+      "path": "plots/baseline_u000000_seed1002_trajectory.pdf",
+      "bytes": 134267
+    },
+    {
+      "path": "plots/baseline_u000000_seed1002_trajectory.png",
+      "bytes": 375760
+    },
+    {
+      "path": "plots/baseline_u000000_seed1004_joint_actions.pdf",
+      "bytes": 149465
+    },
+    {
+      "path": "plots/baseline_u000000_seed1004_joint_actions.png",
+      "bytes": 491220
+    },
+    {
+      "path": "plots/baseline_u000000_seed1004_trajectory.csv",
+      "bytes": 1575840
+    },
+    {
+      "path": "plots/baseline_u000000_seed1004_trajectory.pdf",
+      "bytes": 137651
+    },
+    {
+      "path": "plots/baseline_u000000_seed1004_trajectory.png",
+      "bytes": 372395
+    },
+    {
+      "path": "plots/best_u025000_seed1001_joint_actions.pdf",
+      "bytes": 88478
+    },
+    {
+      "path": "plots/best_u025000_seed1001_joint_actions.png",
+      "bytes": 486066
+    },
+    {
+      "path": "plots/best_u025000_seed1001_trajectory.csv",
+      "bytes": 1070387
+    },
+    {
+      "path": "plots/best_u025000_seed1001_trajectory.pdf",
+      "bytes": 115188
+    },
+    {
+      "path": "plots/best_u025000_seed1001_trajectory.png",
+      "bytes": 366152
+    },
+    {
+      "path": "plots/best_u025000_seed1002_joint_actions.pdf",
+      "bytes": 91572
+    },
+    {
+      "path": "plots/best_u025000_seed1002_joint_actions.png",
+      "bytes": 486434
+    },
+    {
+      "path": "plots/best_u025000_seed1002_trajectory.csv",
+      "bytes": 1095760
+    },
+    {
+      "path": "plots/best_u025000_seed1002_trajectory.pdf",
+      "bytes": 121527
+    },
+    {
+      "path": "plots/best_u025000_seed1002_trajectory.png",
+      "bytes": 365127
+    },
+    {
+      "path": "plots/best_u025000_seed2001_joint_actions.pdf",
+      "bytes": 88891
+    },
+    {
+      "path": "plots/best_u025000_seed2001_joint_actions.png",
+      "bytes": 483087
+    },
+    {
+      "path": "plots/best_u025000_seed2001_trajectory.csv",
+      "bytes": 1074561
+    },
+    {
+      "path": "plots/best_u025000_seed2001_trajectory.pdf",
+      "bytes": 120779
+    },
+    {
+      "path": "plots/best_u025000_seed2001_trajectory.png",
+      "bytes": 366001
+    },
+    {
+      "path": "plots/best_u025000_seed2002_joint_actions.pdf",
+      "bytes": 88203
+    },
+    {
+      "path": "plots/best_u025000_seed2002_joint_actions.png",
+      "bytes": 484213
+    },
+    {
+      "path": "plots/best_u025000_seed2002_trajectory.csv",
+      "bytes": 1061133
+    },
+    {
+      "path": "plots/best_u025000_seed2002_trajectory.pdf",
+      "bytes": 121122
+    },
+    {
+      "path": "plots/best_u025000_seed2002_trajectory.png",
+      "bytes": 366436
+    },
+    {
+      "path": "plots/evaluations.csv",
+      "bytes": 2763
+    },
+    {
+      "path": "plots/final_u100000_seed1001_joint_actions.pdf",
+      "bytes": 91318
+    },
+    {
+      "path": "plots/final_u100000_seed1001_joint_actions.png",
+      "bytes": 481926
+    },
+    {
+      "path": "plots/final_u100000_seed1001_trajectory.csv",
+      "bytes": 1059015
+    },
+    {
+      "path": "plots/final_u100000_seed1001_trajectory.pdf",
+      "bytes": 116964
+    },
+    {
+      "path": "plots/final_u100000_seed1001_trajectory.png",
+      "bytes": 360662
+    },
+    {
+      "path": "plots/final_u100000_seed1002_joint_actions.pdf",
+      "bytes": 92007
+    },
+    {
+      "path": "plots/final_u100000_seed1002_joint_actions.png",
+      "bytes": 489951
+    },
+    {
+      "path": "plots/final_u100000_seed1002_trajectory.csv",
+      "bytes": 1034336
+    },
+    {
+      "path": "plots/final_u100000_seed1002_trajectory.pdf",
+      "bytes": 114066
+    },
+    {
+      "path": "plots/final_u100000_seed1002_trajectory.png",
+      "bytes": 366509
+    },
+    {
+      "path": "plots/final_u100000_seed1006_joint_actions.pdf",
+      "bytes": 113193
+    },
+    {
+      "path": "plots/final_u100000_seed1006_joint_actions.png",
+      "bytes": 506676
+    },
+    {
+      "path": "plots/final_u100000_seed1006_trajectory.csv",
+      "bytes": 1610891
+    },
+    {
+      "path": "plots/final_u100000_seed1006_trajectory.pdf",
+      "bytes": 129258
+    },
+    {
+      "path": "plots/final_u100000_seed1006_trajectory.png",
+      "bytes": 375299
+    },
+    {
+      "path": "plots/final_u175000_seed2001_joint_actions.pdf",
+      "bytes": 93645
+    },
+    {
+      "path": "plots/final_u175000_seed2001_joint_actions.png",
+      "bytes": 491115
+    },
+    {
+      "path": "plots/final_u175000_seed2001_trajectory.csv",
+      "bytes": 1048016
+    },
+    {
+      "path": "plots/final_u175000_seed2001_trajectory.pdf",
+      "bytes": 114617
+    },
+    {
+      "path": "plots/final_u175000_seed2001_trajectory.png",
+      "bytes": 360108
+    },
+    {
+      "path": "plots/final_u175000_seed2002_joint_actions.pdf",
+      "bytes": 93560
+    },
+    {
+      "path": "plots/final_u175000_seed2002_joint_actions.png",
+      "bytes": 490828
+    },
+    {
+      "path": "plots/final_u175000_seed2002_trajectory.csv",
+      "bytes": 1057743
+    },
+    {
+      "path": "plots/final_u175000_seed2002_trajectory.pdf",
+      "bytes": 116478
+    },
+    {
+      "path": "plots/final_u175000_seed2002_trajectory.png",
+      "bytes": 361868
+    },
+    {
+      "path": "plots/plot_index.json",
+      "bytes": 3147
+    },
+    {
+      "path": "plots/success_vs_env_controls.csv",
+      "bytes": 2266
+    },
+    {
+      "path": "plots/success_vs_env_controls.pdf",
+      "bytes": 27423
+    },
+    {
+      "path": "plots/success_vs_env_controls.png",
+      "bytes": 113516
+    },
+    {
+      "path": "plots/success_vs_updates.csv",
+      "bytes": 2266
+    },
+    {
+      "path": "plots/success_vs_updates.pdf",
+      "bytes": 27434
+    },
+    {
+      "path": "plots/success_vs_updates.png",
+      "bytes": 113066
+    },
+    {
+      "path": "plots/success_vs_walltime.csv",
+      "bytes": 2266
+    },
+    {
+      "path": "plots/success_vs_walltime.pdf",
+      "bytes": 27812
+    },
+    {
+      "path": "plots/success_vs_walltime.png",
+      "bytes": 111207
+    }
+  ],
+  "started_epoch": 1795552151.1975632,
+  "finished_epoch": 1795552237.3762865,
+  "observer_deadline": 1795820806.206146,
+  "no_gpu_allocated": true
+}

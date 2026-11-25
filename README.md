@@ -1,5 +1,24 @@
 # ChemLab RL
 
+## Completed QC results and videos
+
+Vial-placement QC finished on November 24, 2026, early-stopping at 175K updates.
+The selected 25K checkpoint and final 175K policy each succeeded in 20/20 final
+stochastic rollouts in the same fixed scene.
+
+[All plots and videos](https://github.com/iherath/ChemLab-RL/blob/main/docs/results/vial_qc_bc400k_20261124/README.md) · [Download the complete results ZIP](https://raw.githubusercontent.com/iherath/ChemLab-RL/main/docs/results/vial_qc_bc400k_20261124/final_results.zip)
+
+| Policy | Video 1 | Video 2 |
+| --- | --- | --- |
+| BC baseline, before QC | [Seed 1001](https://raw.githubusercontent.com/iherath/ChemLab-RL/main/docs/results/vial_qc_bc400k_20261124/videos/bc_seed1001.mp4) | [Seed 1002](https://raw.githubusercontent.com/iherath/ChemLab-RL/main/docs/results/vial_qc_bc400k_20261124/videos/bc_seed1002.mp4) |
+| Selected QC checkpoint at 25K | [Seed 2001](https://raw.githubusercontent.com/iherath/ChemLab-RL/main/docs/results/vial_qc_bc400k_20261124/videos/selected25k_seed2001.mp4) | [Seed 2002](https://raw.githubusercontent.com/iherath/ChemLab-RL/main/docs/results/vial_qc_bc400k_20261124/videos/selected25k_seed2002.mp4) |
+| Final QC checkpoint at 175K | [Seed 2001](https://raw.githubusercontent.com/iherath/ChemLab-RL/main/docs/results/vial_qc_bc400k_20261124/videos/qc175k_seed2001.mp4) | [Seed 2002](https://raw.githubusercontent.com/iherath/ChemLab-RL/main/docs/results/vial_qc_bc400k_20261124/videos/qc175k_seed2002.mp4) |
+
+The QC videos were recorded during final evaluation. No 200K/400K milestone videos
+exist because those updates were not reached. The results index includes success
+curves, rollout trajectories, joint/action plots, PDFs, CSVs and evaluation details.
+These fixed-scene results do not establish held-out scene or powder generalization.
+
 The current colleague handoff trains SmolVLA with BC, then compares frozen-BC
 best-of-N, scalar OGPO, and VaDar + OGPO on native MuJoCo vial placement. Start
 with the [training runbook](docs/VIAL_VLA_RUNBOOK.md) and
